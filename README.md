@@ -1,6 +1,6 @@
-# Mina zkApp: Nft Zkapp
+# nft-zkapp: a simple privacy NFT based on mina zkApp
 
-This template uses TypeScript.
+NFT Proof of Concept based on mina actions/reducer scheme.
 
 ## How to build
 

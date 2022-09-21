@@ -1,3 +1,3 @@
-import { Add } from './nft_zkapp.js';
+import { NftZkapp } from './nft_zkapp.js';
 
-export { Add };
+export { NftZkapp };

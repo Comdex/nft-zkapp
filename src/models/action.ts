@@ -8,15 +8,15 @@ export const ACTION_TYPE_TRANSFER = Field(1);
 
 export class Action extends CircuitValue {
   @prop type: Field;
-  @prop oldNFT: NFT;
-  @prop newNFT: NFT;
-  @prop nftIndex: Field;
+  @prop nft: NFT;
+  @prop index: Field;
+  @prop sourceNftHash: Field;
 
-  constructor(type: Field, oldNFT: NFT, newNFT: NFT, nftIndex: Field) {
+  constructor(type: Field, nft: NFT, index: Field, sourceNftHash: Field) {
     super();
     this.type = type;
-    this.oldNFT = oldNFT;
-    this.newNFT = newNFT;
-    this.nftIndex = nftIndex;
+    this.nft = nft;
+    this.index = index;
+    this.sourceNftHash = sourceNftHash;
   }
 }

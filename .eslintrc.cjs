@@ -5,7 +5,7 @@ module.exports = {
     node: true,
     jest: true,
   },
-  extends: ['eslint:recommended', 'plugin:snarkyjs/recommended'],
+  extends: ['eslint:recommended'],
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 'latest',

@@ -1,8 +1,28 @@
-import { Encoding, isReady } from "snarkyjs";
+import {
+  createEmptyValue,
+  MemoryStore,
+  NumIndexSparseMerkleTree,
+} from 'snarky-smt';
+import { Encoding, isReady, shutdown } from 'snarkyjs';
+import { NFT } from './models/nft';
 
 await isReady;
 
-let fs = Encoding.Bijective.Fp.fromString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1"><text x="0" y="15" fill="red"></text></svg>
+let fs = Encoding.Bijective.Fp
+  .fromString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1"><text x="0" y="15" fill="red"></text></svg>
 `);
 
-console.log("fs length: ", fs.length);
+console.log('fs length: ', fs.length);
+
+let tree = await NumIndexSparseMerkleTree.buildNewTree<NFT>(
+  new MemoryStore(),
+  13
+);
+
+let root = tree.getRoot();
+
+root = await tree.update(0n, createEmptyValue(NFT));
+
+console.log('tree root: ', root.toString());
+
+shutdown();
