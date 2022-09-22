@@ -84,7 +84,9 @@ async function test() {
   // first rollup
   // 1. execute the contract rollup method
   let pendingActions = getPendingActions(zkapp, fromActionHash);
+  console.log('pendingActions: ', pendingActions.toString());
   let indexes = getIndexes(pendingActions, currentIndex);
+  console.log('indexes: ', indexes.toString());
   let proofStore = await getProofsByIndexes(indexes);
   zkapp.setProofStore(proofStore);
   tx = await Mina.transaction(feePayerKey, () => {
