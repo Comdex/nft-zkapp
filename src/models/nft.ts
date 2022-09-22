@@ -17,7 +17,7 @@ export { NFT, NFTData, DUMMY_NFT_ID };
 
 const DUMMY_NFT_ID = Field.zero;
 const DUMMY_DATA_FIELD = Field.zero;
-const MAX_CONTENT_LENGTH = 6;
+const MAX_CONTENT_LENGTH = 2;
 
 class NFTData extends CircuitValue {
   @arrayProp(Field, MAX_CONTENT_LENGTH) content: Field[];
