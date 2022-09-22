@@ -134,6 +134,9 @@ class NftZkapp extends SmartContract {
       pendingActions,
       Field,
       (curIdx: Field, action: Action) => {
+        Circuit.asProver(() => {
+          console.log('curIdx: ', curIdx.toString());
+        });
         actions.push(action);
 
         let newCurIdx = Circuit.if(action.isMint(), curIdx.add(1), curIdx);
@@ -142,6 +145,10 @@ class NftZkapp extends SmartContract {
           action.nft.id,
           newCurIdx
         );
+
+        Circuit.asProver(() => {
+          console.log('finalIdx: ', finalIdx.toString());
+        });
 
         let merkleProof = Circuit.witness(MerkleProof, () => {
           let idxNum = finalIdx.toBigInt();
