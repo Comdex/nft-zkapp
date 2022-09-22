@@ -82,6 +82,9 @@ function getIndexes(pendingActions: Action[], currentIndex: Field): bigint[] {
     }
   });
 
+  // TO REMOVE, for test
+  indexes.push(curIdx + 1n);
+
   return indexes;
 }
 
