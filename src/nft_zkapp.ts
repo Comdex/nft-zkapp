@@ -34,7 +34,6 @@ const nftSymbol = 'MG';
 class MerkleProof extends NumIndexSparseMerkleProof(treeHeight) {}
 
 class NftZkapp extends SmartContract {
-  MAX_SUPPLY = Field(1000);
   reducer = Experimental.Reducer({ actionType: Action });
 
   @state(Field) nftsCommitment = State<Field>();
@@ -63,15 +62,6 @@ class NftZkapp extends SmartContract {
 
   symbol(): CircuitString {
     return CircuitString.fromString(nftSymbol);
-  }
-
-  canMint(): boolean {
-    let currentIndex = this.currentIndex.get();
-    if (currentIndex.lt(this.MAX_SUPPLY).toBoolean()) {
-      return true;
-    }
-
-    return false;
   }
 
   // TODO
@@ -146,13 +136,12 @@ class NftZkapp extends SmartContract {
       (curIdx: Field, action: Action) => {
         actions.push(action);
 
-        let newCurIdx = Circuit.if(
-          action.isMint().and(curIdx.add(1).lte(this.MAX_SUPPLY)),
-          curIdx.add(1),
-          curIdx
+        let newCurIdx = Circuit.if(action.isMint(), curIdx.add(1), curIdx);
+        let finalIdx = Circuit.if(
+          action.isTransfer(),
+          action.nft.id,
+          newCurIdx
         );
-        let idx = Circuit.if(action.isTransfer(), action.nft.id, newCurIdx);
-        let finalIdx = Circuit.if(idx.gt(this.MAX_SUPPLY), DUMMY_NFT_ID, idx);
 
         let merkleProof = Circuit.witness(MerkleProof, () => {
           let idxNum = finalIdx.toBigInt();
@@ -175,11 +164,7 @@ class NftZkapp extends SmartContract {
     for (let i = 0; i < actions.length; i++) {
       let action = actions[i];
 
-      tempCurIdx = Circuit.if(
-        action.isMint().and(tempCurIdx.add(1).lte(this.MAX_SUPPLY)),
-        tempCurIdx.add(1),
-        tempCurIdx
-      );
+      tempCurIdx = Circuit.if(action.isMint(), tempCurIdx.add(1), tempCurIdx);
       let finalIdx = Circuit.if(action.isTransfer(), action.nft.id, tempCurIdx);
 
       let membershipProof = Circuit.witness(MerkleProof, () => {
@@ -195,11 +180,7 @@ class NftZkapp extends SmartContract {
 
       let [updateIndex, updateNFTHash] = Circuit.if(
         action.isMint(),
-        Circuit.if(
-          finalIdx.gt(this.MAX_SUPPLY),
-          [DUMMY_NFT_ID, action.originalNFTHash],
-          [finalIdx, action.nft.assignId(finalIdx).hash()]
-        ),
+        [finalIdx, action.nft.assignId(finalIdx).hash()],
         // Check whether the transfer is valid
         Circuit.if(
           membershipProof.verifyByFieldInCircuit(

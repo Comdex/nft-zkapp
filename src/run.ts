@@ -80,7 +80,6 @@ async function test() {
   let endActionHash = zkapp.currentActionsHash.get();
   let currentIndex = zkapp.currentIndex.get();
   let nftsCommitment = zkapp.nftsCommitment.get();
-  let maxSupply = zkapp.MAX_SUPPLY;
 
   // first rollup
   // 1. execute the contract rollup method
@@ -108,8 +107,7 @@ async function test() {
     fromActionHash,
     endActionHash,
     nftsCommitment,
-    currentIndex,
-    maxSupply
+    currentIndex
   );
   console.log('indexerUpdateRoot1: ', indexerUpdateRoot1.toString());
 

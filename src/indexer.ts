@@ -23,16 +23,14 @@ async function indexerUpdate(
   fromActionHash: Field,
   endActionHash: Field,
   nftsCommitment: Field,
-  currentIndex: Field,
-  maxSupply: Field
+  currentIndex: Field
 ): Promise<Field> {
   let pendingActions = getPendingActions(zkapp, fromActionHash, endActionHash);
   let root = await updateIndexerMerkleTree(
     merkleTree,
     pendingActions,
     nftsCommitment,
-    currentIndex,
-    maxSupply
+    currentIndex
   );
   return root;
 }
@@ -91,20 +89,17 @@ async function updateIndexerMerkleTree(
   tree: NumIndexSparseMerkleTree<NFT>,
   pendingActions: Action[],
   nftsCommitment: Field,
-  currentIndex: Field,
-  maxSupply: Field
+  currentIndex: Field
 ): Promise<Field> {
   let root = tree.getRoot();
   for (let i = 0; i < pendingActions.length; i++) {
     let action = pendingActions[i];
     if (action.isMint().toBoolean()) {
-      if (currentIndex.add(1).lte(maxSupply).toBoolean()) {
-        currentIndex = currentIndex.add(1);
-        root = await tree.update(
-          currentIndex.toBigInt(),
-          action.nft.assignId(currentIndex)
-        );
-      }
+      currentIndex = currentIndex.add(1);
+      root = await tree.update(
+        currentIndex.toBigInt(),
+        action.nft.assignId(currentIndex)
+      );
     } else {
       // transfer action
       let proof = await tree.prove(action.nft.id.toBigInt());
