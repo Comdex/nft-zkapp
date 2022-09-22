@@ -13,7 +13,9 @@ import {
 
 await isReady;
 
-export class OwnerSecret extends CircuitValue {
+export { OwnerSecret, OwnerSecretCipherText };
+
+class OwnerSecret extends CircuitValue {
   @prop owner: PublicKey;
   @prop blinding: Field; //random number
 
@@ -34,7 +36,7 @@ export class OwnerSecret extends CircuitValue {
 
 const CIPHER_TEXT_LENGTH = OwnerSecret.sizeInFields() + 1;
 
-export class OwnerSecretCipherText extends CircuitValue {
+class OwnerSecretCipherText extends CircuitValue {
   @prop publicKey: Group;
   @arrayProp(Field, CIPHER_TEXT_LENGTH) cipherText: Field[];
 

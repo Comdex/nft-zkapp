@@ -17,53 +17,44 @@ import {
   AccountUpdate,
   shutdown,
   CircuitString,
-  UInt32,
 } from 'snarkyjs';
-import {
-  Action,
-  ACTION_TYPE_MINT,
-  ACTION_TYPE_TRANSFER,
-} from './models/action';
-import { NFT } from './models/nft';
-import { NFTWithIndex } from './models/nft_with_index';
+import { treeHeight } from './constant';
+import { merkleTree } from './indexer';
+import { Action } from './models/action';
+import { DUMMY_NFT_ID, NFT } from './models/nft';
 import { OwnerSecret } from './models/owner_secret';
 
-export { NftZkapp };
+export { NftZkapp, MerkleProof };
 
-const doProofs = true;
-const treeHeight = 13;
-
-const initCommitment = Field(
-  '16414894720763442886261603851925762864778244212151669304308726942427436045416'
-);
+const initCommitment = merkleTree.getRoot();
 const initIndex = Field.zero;
-const dummyIdx = Field.zero;
-const dummySourceNftHash = SMT_EMPTY_VALUE;
 const nftName = 'MinaGenesis';
 const nftSymbol = 'MG';
 
 class MerkleProof extends NumIndexSparseMerkleProof(treeHeight) {}
 
 class NftZkapp extends SmartContract {
-  MAX_SUPPLY = UInt32.from(8000);
-
+  MAX_SUPPLY = Field(1000);
   reducer = Experimental.Reducer({ actionType: Action });
 
   @state(Field) nftsCommitment = State<Field>();
   @state(Field) currentIndex = State<Field>();
-  @state(Field) actionsHash = State<Field>();
+  @state(Field) lastActionsHash = State<Field>();
+  @state(Field) currentActionsHash = State<Field>();
 
   proofStore: Map<bigint, MerkleProof>;
-
-  setProofStore(proofStore: Map<bigint, MerkleProof>) {
-    this.proofStore = proofStore;
-  }
+  indexerUrl: string;
 
   deploy(args: DeployArgs) {
     super.deploy(args);
     this.nftsCommitment.set(initCommitment);
     this.currentIndex.set(initIndex);
-    this.actionsHash.set(Experimental.Reducer.initialActionsHash);
+    this.lastActionsHash.set(Experimental.Reducer.initialActionsHash);
+    this.currentActionsHash.set(Experimental.Reducer.initialActionsHash);
+  }
+
+  setProofStore(proofStore: Map<bigint, MerkleProof>) {
+    this.proofStore = proofStore;
   }
 
   name(): CircuitString {
@@ -74,27 +65,42 @@ class NftZkapp extends SmartContract {
     return CircuitString.fromString(nftSymbol);
   }
 
-  @method
-  mint(nft: NFT) {
-    this.reducer.dispatch(
-      new Action(ACTION_TYPE_MINT, nft, dummyIdx, dummySourceNftHash)
-    );
+  canMint(): boolean {
+    let currentIndex = this.currentIndex.get();
+    if (currentIndex.lt(this.MAX_SUPPLY).toBoolean()) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // TODO
+  // eslint-disable-next-line no-unused-vars
+  getNFT(id: Field): NFT {
+    return NFT.empty();
+  }
+
+  // TODO
+  // eslint-disable-next-line no-unused-vars
+  tokenURI(id: Field): string {
+    return '';
   }
 
   @method
-  transfer(
-    receiver: PublicKey,
-    nftwithindex: NFTWithIndex,
-    senderKey: PrivateKey
-  ) {
-    let { nft: sourceNft, index } = nftwithindex;
-    sourceNft.ownerSecret.checkOwner(senderKey).assertTrue();
-    let newNft = sourceNft.clone();
-    newNft.ownerSecret = new OwnerSecret(receiver).encrypt();
+  mint(nft: NFT) {
+    nft.id.assertEquals(DUMMY_NFT_ID);
+    this.reducer.dispatch(Action.mint(nft));
+  }
 
-    this.reducer.dispatch(
-      new Action(ACTION_TYPE_TRANSFER, newNft, index, sourceNft.hash())
-    );
+  @method
+  transfer(receiver: PublicKey, nft: NFT, senderKey: PrivateKey) {
+    nft.id.equals(DUMMY_NFT_ID).assertFalse();
+    nft.data.ownerSecret.checkOwner(senderKey).assertTrue();
+
+    const originalNFTHash = nft.hash();
+    nft.data.ownerSecret = new OwnerSecret(receiver).encrypt();
+
+    this.reducer.dispatch(Action.transfer(nft, originalNFTHash));
   }
 
   @method
@@ -105,11 +111,16 @@ class NftZkapp extends SmartContract {
     let currentIndex = this.currentIndex.get();
     this.currentIndex.assertEquals(currentIndex);
 
-    let actionsHash = this.actionsHash.get();
-    this.actionsHash.assertEquals(actionsHash);
+    let lastActionsHash = this.lastActionsHash.get();
+    this.lastActionsHash.assertEquals(lastActionsHash);
+
+    let currentActionsHash = this.currentActionsHash.get();
+    this.currentActionsHash.assertEquals(currentActionsHash);
+
+    this.lastActionsHash.set(currentActionsHash);
 
     let pendingActions = this.reducer.getActions({
-      fromActionHash: actionsHash,
+      fromActionHash: currentActionsHash,
     });
 
     let actions: Action[] = [];
@@ -127,93 +138,76 @@ class NftZkapp extends SmartContract {
 
       return proof.toConstant();
     });
-
     deepSubTree.addBranch(dummyProof, SMT_EMPTY_VALUE);
 
-    let { state: newCurrentIndex, actionsHash: newActionsHash } =
-      this.reducer.reduce(
-        pendingActions,
-        Field,
-        (nextIndex: Field, action: Action) => {
-          actions.push(action);
+    let { actionsHash: newActionsHash } = this.reducer.reduce(
+      pendingActions,
+      Field,
+      (curIdx: Field, action: Action) => {
+        actions.push(action);
 
-          let newNextIndex = Circuit.if(
-            action.type.equals(ACTION_TYPE_MINT),
-            nextIndex.add(1),
-            nextIndex
-          );
-          let index2 = Circuit.if(
-            action.type.equals(ACTION_TYPE_TRANSFER),
-            action.index,
-            newNextIndex
-          );
+        let newCurIdx = Circuit.if(
+          action.isMint().and(curIdx.add(1).lte(this.MAX_SUPPLY)),
+          curIdx.add(1),
+          curIdx
+        );
+        let idx = Circuit.if(action.isTransfer(), action.nft.id, newCurIdx);
+        let finalIdx = Circuit.if(idx.gt(this.MAX_SUPPLY), DUMMY_NFT_ID, idx);
 
-          let finalIndex = Circuit.if(
-            index2.gt(this.MAX_SUPPLY.value),
-            Field.zero,
-            index2
-          );
+        let merkleProof = Circuit.witness(MerkleProof, () => {
+          let idxNum = finalIdx.toBigInt();
+          let proof = this.proofStore.get(idxNum);
+          if (proof === undefined) {
+            throw new Error(
+              `Merkle Proof with index: ${idxNum} could not be found`
+            );
+          }
+          return proof.toConstant();
+        });
 
-          let merkleProof = Circuit.witness(MerkleProof, () => {
-            let indexNum = finalIndex.toBigInt();
-            let proof = this.proofStore.get(finalIndex.toBigInt());
-            if (proof === undefined) {
-              throw new Error(
-                `Merkle Proof with index: ${indexNum} could not be found`
-              );
-            }
+        deepSubTree.addBranch(merkleProof, action.originalNFTHash);
+        return newCurIdx;
+      },
+      { state: currentIndex, actionsHash: currentActionsHash }
+    );
 
-            return proof.toConstant();
-          });
-          deepSubTree.addBranch(merkleProof, action.sourceNftHash);
-
-          return newNextIndex;
-        },
-        { state: currentIndex, actionsHash }
-      );
-
-    let tempCurrentIndex = currentIndex;
+    let tempCurIdx = currentIndex;
     for (let i = 0; i < actions.length; i++) {
       let action = actions[i];
-      tempCurrentIndex = Circuit.if(
-        action.type.equals(ACTION_TYPE_MINT),
-        tempCurrentIndex.add(1),
-        tempCurrentIndex
-      );
 
-      let finalIndex = Circuit.if(
-        action.type.equals(ACTION_TYPE_TRANSFER),
-        action.index,
-        tempCurrentIndex
+      tempCurIdx = Circuit.if(
+        action.isMint().and(tempCurIdx.add(1).lte(this.MAX_SUPPLY)),
+        tempCurIdx.add(1),
+        tempCurIdx
       );
+      let finalIdx = Circuit.if(action.isTransfer(), action.nft.id, tempCurIdx);
 
       let membershipProof = Circuit.witness(MerkleProof, () => {
-        let indexNum = finalIndex.toBigInt();
-        let proof = this.proofStore.get(finalIndex.toBigInt());
+        let indexNum = finalIdx.toBigInt();
+        let proof = this.proofStore.get(indexNum);
         if (proof === undefined) {
           throw new Error(
             `Merkle Proof with index: ${indexNum} could not be found`
           );
         }
-
         return proof.toConstant();
       });
 
       let [updateIndex, updateNFTHash] = Circuit.if(
-        action.type.equals(ACTION_TYPE_MINT),
+        action.isMint(),
         Circuit.if(
-          finalIndex.gt(this.MAX_SUPPLY.value),
-          [Field.zero, SMT_EMPTY_VALUE],
-          [finalIndex, action.nft.hash()]
+          finalIdx.gt(this.MAX_SUPPLY),
+          [DUMMY_NFT_ID, action.originalNFTHash],
+          [finalIdx, action.nft.assignId(finalIdx).hash()]
         ),
         // Check whether the transfer is valid
         Circuit.if(
           membershipProof.verifyByFieldInCircuit(
             nftsCommitment,
-            action.sourceNftHash
+            action.originalNFTHash
           ),
-          [finalIndex, action.nft.hash()],
-          [Field.zero, SMT_EMPTY_VALUE]
+          [finalIdx, action.nft.hash()],
+          [DUMMY_NFT_ID, SMT_EMPTY_VALUE]
         )
       );
 
@@ -222,65 +216,7 @@ class NftZkapp extends SmartContract {
 
     let finalRoot = deepSubTree.getRoot();
     this.nftsCommitment.set(finalRoot);
-    this.actionsHash.set(newActionsHash);
-    this.currentIndex.set(newCurrentIndex);
+    this.currentActionsHash.set(newActionsHash);
+    this.currentIndex.set(tempCurIdx);
   }
 }
-
-let Local = Mina.LocalBlockchain();
-Mina.setActiveInstance(Local);
-
-let feePayerKey = Local.testAccounts[0].privateKey;
-let callerKey = Local.testAccounts[1].privateKey;
-let callerPublicKey = callerKey.toPublicKey();
-let receiverKey = Local.testAccounts[2].privateKey;
-let receiverPublicKey = receiverKey.toPublicKey();
-let zkappKey = PrivateKey.random();
-let zkappAddress = zkappKey.toPublicKey();
-
-async function test() {
-  let zkapp = new NftZkapp(zkappAddress);
-
-  if (doProofs) {
-    console.log('start compiling');
-    console.time('compile');
-    await NftZkapp.compile();
-    console.timeEnd('compile');
-  }
-
-  console.log('deploying');
-  let tx = await Mina.transaction(feePayerKey, () => {
-    AccountUpdate.fundNewAccount(feePayerKey);
-    zkapp.deploy({ zkappKey });
-
-    if (!doProofs) {
-      zkapp.setPermissions({
-        ...Permissions.default(),
-        editState: Permissions.proofOrSignature(),
-        editSequenceState: Permissions.proofOrSignature(),
-      });
-    }
-  });
-
-  if (doProofs) await tx.prove();
-  tx.send();
-  console.log('deploy done');
-
-  tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.generate('hello world!', receiverPublicKey));
-    if (!doProofs) zkapp.sign(zkappKey);
-  });
-  if (doProofs) await tx.prove();
-  tx.send();
-
-  tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.generate('Mina Genesis!', receiverPublicKey));
-    if (!doProofs) zkapp.sign(zkappKey);
-  });
-  if (doProofs) await tx.prove();
-  tx.send();
-
-  shutdown();
-}
-
-await test();
