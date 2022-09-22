@@ -7,6 +7,7 @@ import {
 } from 'snarkyjs';
 import {
   getIndexes,
+  getNFTFromIndexer,
   getPendingActions,
   getProofsByIndexes,
   indexerUpdate,
@@ -56,21 +57,21 @@ async function test() {
 
   // mint nft
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 1', receiverPublicKey));
+    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 1', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
 
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 2', receiverPublicKey));
+    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 2', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
 
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 3', receiverPublicKey));
+    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 3', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
@@ -112,9 +113,61 @@ async function test() {
     currentIndex
   );
   console.log('indexerUpdateRoot1: ', indexerUpdateRoot1.toString());
-
   // root must be equal
   indexerUpdateRoot1.assertEquals(rollupCompletedRoot1);
+
+  let nft1 = await getNFTFromIndexer(1n);
+  tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.transfer(receiverPublicKey, nft1, callerKey);
+    if (!doProofs) zkapp.sign(zkappKey);
+  });
+  if (doProofs) await tx.prove();
+  tx.send();
+
+  let nft2 = await getNFTFromIndexer(2n);
+  tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.transfer(receiverPublicKey, nft2, callerKey);
+    if (!doProofs) zkapp.sign(zkappKey);
+  });
+  if (doProofs) await tx.prove();
+  tx.send();
+
+  // second rollup
+  // 1. execute the contract rollup method
+  fromActionHash = zkapp.lastActionsHash.get();
+  endActionHash = zkapp.currentActionsHash.get();
+  pendingActions = getPendingActions(zkapp, fromActionHash, endActionHash);
+  console.log('second rollup - pendingActions: ', pendingActions.toString());
+  indexes = getIndexes(pendingActions, currentIndex);
+  console.log('second rollup - indexes: ', indexes.toString());
+  proofStore = await getProofsByIndexes(indexes);
+  zkapp.setProofStore(proofStore);
+
+  tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.rollup();
+    if (!doProofs) zkapp.sign(zkappKey);
+  });
+  if (doProofs) await tx.prove();
+  tx.send();
+  let rollupCompletedRoot2 = zkapp.nftsCommitment.get();
+  console.log('rollupCompletedRoot2: ', rollupCompletedRoot2.toString());
+
+  // 2. indexer update
+  fromActionHash = zkapp.lastActionsHash.get();
+  endActionHash = zkapp.currentActionsHash.get();
+  currentIndex = zkapp.currentIndex.get();
+  nftsCommitment = zkapp.nftsCommitment.get();
+  let indexerUpdateRoot2 = await indexerUpdate(
+    zkapp,
+    fromActionHash,
+    endActionHash,
+    nftsCommitment,
+    currentIndex
+  );
+  console.log('indexerUpdateRoot2: ', indexerUpdateRoot2.toString());
+
+  // root must be equal
+  indexerUpdateRoot2.assertEquals(rollupCompletedRoot2);
 
   shutdown();
 }

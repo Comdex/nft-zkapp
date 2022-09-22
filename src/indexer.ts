@@ -11,12 +11,18 @@ export {
   getIndexes,
   indexerUpdate,
   merkleTree,
+  getNFTFromIndexer,
 };
 
 let merkleTree = await NumIndexSparseMerkleTree.buildNewTree<NFT>(
   new MemoryStore(),
   treeHeight
 );
+
+async function getNFTFromIndexer(id: bigint): Promise<NFT> {
+  let nft = await merkleTree.get(id);
+  return nft!;
+}
 
 async function indexerUpdate(
   zkapp: NftZkapp,
