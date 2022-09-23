@@ -28,6 +28,7 @@ class NFTData extends CircuitValue {
     for (let i = content.length; i < MAX_CONTENT_LENGTH; i++) {
       content.push(DUMMY_DATA_FIELD);
     }
+
     this.content = content;
     this.ownerSecret = ownerSecret;
   }
@@ -45,17 +46,30 @@ class NFTData extends CircuitValue {
     return Poseidon.hash(this.toFields());
   }
 
+  clone(): NFTData {
+    let newContent = this.content.map((v) => v);
+    let newOwnerSecret = this.ownerSecret.clone();
+    return new NFTData(newContent, newOwnerSecret);
+  }
+
   getNFTString(): string {
     let realStr: Field[] = [];
     for (let i = 0; i < this.content.length; i++) {
       let f = this.content[i];
-      if (f.equals(DUMMY_DATA_FIELD)) {
+      if (f.equals(DUMMY_DATA_FIELD).toBoolean()) {
         break;
       }
       realStr.push(f);
     }
 
     return Encoding.Bijective.Fp.toString(realStr);
+  }
+
+  toPlainJsObj(): any {
+    return {
+      content: this.content.toString(),
+      ownerSecret: this.ownerSecret.toPlainJsObj(),
+    };
   }
 }
 
@@ -83,11 +97,22 @@ class NFT extends CircuitValue {
     return this;
   }
 
+  clone(): NFT {
+    return new NFT(this.id, this.data.clone());
+  }
+
   hash(): Field {
     return Poseidon.hash(this.toFields());
   }
 
   getNFTString(): string {
     return this.data.getNFTString();
+  }
+
+  toPlainJsObj(): any {
+    return {
+      id: this.id.toString(),
+      data: this.data.toPlainJsObj(),
+    };
   }
 }

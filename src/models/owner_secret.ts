@@ -26,7 +26,9 @@ class OwnerSecret extends CircuitValue {
   }
 
   encrypt(): OwnerSecretCipherText {
-    const cipherText = Encryption.encrypt(this.toFields(), this.owner);
+    let newFields = this.toFields().map((v) => v);
+    let newOwner = PublicKey.fromGroup(this.owner.toGroup());
+    const cipherText = Encryption.encrypt(newFields, newOwner);
     return new OwnerSecretCipherText(
       cipherText.publicKey,
       cipherText.cipherText
@@ -53,9 +55,19 @@ class OwnerSecretCipherText extends CircuitValue {
     return new OwnerSecret(owner, blinding).encrypt();
   }
 
+  toPlainJsObj(): any {
+    return {
+      publicKey: this.publicKey.toJSON(),
+      cipherText: this.cipherText.toString(),
+    };
+  }
+
   decrypt(ownerPrivateKey: PrivateKey): OwnerSecret {
+    let newCipherText: Field[] = this.cipherText.map((v) => v);
+    let newPublicKey = Group.ofFields([this.publicKey.x, this.publicKey.y]);
+
     const decryptedFields = Encryption.decrypt(
-      { publicKey: this.publicKey, cipherText: this.cipherText },
+      { publicKey: newPublicKey, cipherText: newCipherText },
       ownerPrivateKey
     );
     return OwnerSecret.ofFields(decryptedFields);

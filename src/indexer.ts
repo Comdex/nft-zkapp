@@ -29,6 +29,7 @@ async function indexerUpdate(
   fromActionHash: Field,
   endActionHash: Field,
   nftsCommitment: Field,
+  lastIndex: Field,
   currentIndex: Field
 ): Promise<Field> {
   let pendingActions = getPendingActions(zkapp, fromActionHash, endActionHash);
@@ -36,6 +37,7 @@ async function indexerUpdate(
     merkleTree,
     pendingActions,
     nftsCommitment,
+    lastIndex,
     currentIndex
   );
   return root;
@@ -88,8 +90,8 @@ function getIndexes(pendingActions: Action[], currentIndex: Field): bigint[] {
     }
   });
 
-  // TO REMOVE, for test
-  indexes.push(curIdx + 1n);
+  // // TO REMOVE, for test
+  // indexes.push(curIdx + 1n);
 
   return indexes;
 }
@@ -98,20 +100,21 @@ async function updateIndexerMerkleTree(
   tree: NumIndexSparseMerkleTree<NFT>,
   pendingActions: Action[],
   nftsCommitment: Field,
+  lastIndex: Field,
   currentIndex: Field
 ): Promise<Field> {
   let root = tree.getRoot();
+  let curPos = lastIndex;
   for (let i = 0; i < pendingActions.length; i++) {
     let action = pendingActions[i];
-    if (action.isMint().toBoolean()) {
-      currentIndex = currentIndex.add(1);
-      root = await tree.update(
-        currentIndex.toBigInt(),
-        action.nft.assignId(currentIndex)
-      );
+    if (action.isMint().toBoolean() && curPos.lte(currentIndex).toBoolean()) {
+      curPos = curPos.add(1);
+      console.log('indexer-mint nft id: ', curPos.toString());
+      root = await tree.update(curPos.toBigInt(), action.nft.assignId(curPos));
     } else {
       // transfer action
       let proof = await tree.prove(action.nft.id.toBigInt());
+      console.log('indexer-transfer nft id: ', action.nft.id.toString());
       let isMember = proof.verifyByField(
         nftsCommitment,
         action.originalNFTHash

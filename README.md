@@ -7,6 +7,8 @@ This is a simple NFT project that tries to use snarkyjs's actions/reducer featur
 In fact, the solution shown in this project requires developers or anyone else to run an indexer off-chain (a web service that monitors mina network events to update the merkle tree and provides NFT data and merkle proof data queries to the public).
 The main function of this indexer is to monitor the state changes of the contract under the chain, and construct the merkle tree corresponding to the contract by obtaining sequence events from the mina network, and provide users with NFT data query services and merkle proof query services. Since any user can obtain the source code of indexer To run the indexer, get all the event data from mina's archive node and initiate rollup transactions in the contract, so we can consider this solution to be decentralized and permissionless.
 
+![flow](./docs/nftzkapp.png)
+
 ## How to build
 
 ```sh

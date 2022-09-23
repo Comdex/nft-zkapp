@@ -6,8 +6,9 @@ await isReady;
 
 export { ACTION_TYPE_MINT, ACTION_TYPE_TRANSFER, Action };
 
-const ACTION_TYPE_MINT = Field(0);
-const ACTION_TYPE_TRANSFER = Field(1);
+const ACTION_TYPE_DUMMY = Field(0);
+const ACTION_TYPE_MINT = Field(1);
+const ACTION_TYPE_TRANSFER = Field(2);
 const DUMMY_ORIGINALNFTHASH = SMT_EMPTY_VALUE;
 
 class Action extends CircuitValue {
@@ -28,6 +29,18 @@ class Action extends CircuitValue {
 
   isTransfer(): Bool {
     return this.type.equals(ACTION_TYPE_TRANSFER);
+  }
+
+  isDummyData(): Bool {
+    return this.type.equals(ACTION_TYPE_DUMMY);
+  }
+
+  toString(): string {
+    return JSON.stringify({
+      type: this.type.toString(),
+      nft: this.nft.toPlainJsObj(),
+      originalNFTHash: this.originalNFTHash.toString(),
+    });
   }
 
   static mint(nft: NFT): Action {
