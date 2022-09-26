@@ -117,6 +117,10 @@ class NftZkapp extends SmartContract {
     let nftsCommitment = this.nftsCommitment.get();
     this.nftsCommitment.assertEquals(nftsCommitment);
 
+    Circuit.asProver(() => {
+      console.log('rollup-nftsCommitment: ', nftsCommitment.toString());
+    });
+
     let lastIndex = this.lastIndex.get();
     this.lastIndex.assertEquals(lastIndex);
 
@@ -142,6 +146,7 @@ class NftZkapp extends SmartContract {
 
     let actions: Action[] = [];
     let finalIdxs: Field[] = [];
+    let proofs: MerkleProof[] = [];
 
     let deepSubTree = new NumIndexDeepSparseMerkleSubTreeForField(
       nftsCommitment,
@@ -174,10 +179,6 @@ class NftZkapp extends SmartContract {
           let finalIdx = Circuit.if(action.isDummyData(), DUMMY_NFT_ID, idx2);
           finalIdxs.push(finalIdx);
 
-          // Circuit.asProver(() => {
-          //   console.log('finalIdx: ', finalIdx.toString());
-          // });
-
           let merkleProof = Circuit.witness(MerkleProof, () => {
             let idxNum = finalIdx.toBigInt();
             let proof = this.proofStore.get(idxNum);
@@ -188,6 +189,7 @@ class NftZkapp extends SmartContract {
             }
             return proof.toConstant();
           });
+          proofs.push(merkleProof);
 
           deepSubTree.addBranch(merkleProof, action.originalNFTHash);
           return newCurIdx;
@@ -207,16 +209,7 @@ class NftZkapp extends SmartContract {
       //   console.log('update status, action: ', action.toString());
       // });
 
-      let membershipProof = Circuit.witness(MerkleProof, () => {
-        let indexNum = finalIdx.toBigInt();
-        let proof = this.proofStore.get(indexNum);
-        if (proof === undefined) {
-          throw new Error(
-            `Merkle Proof with index: ${indexNum} could not be found`
-          );
-        }
-        return proof.toConstant();
-      });
+      let membershipProof = proofs[i];
 
       let [updateIndex, updateNFTHash] = Circuit.if(
         action.isMint(),
@@ -236,11 +229,11 @@ class NftZkapp extends SmartContract {
         )
       );
 
-      // Circuit.asProver(() => {
-      //   console.log(
-      //     `updateIndex: ${updateIndex}, updateNFTHash: ${updateNFTHash}`
-      //   );
-      // });
+      Circuit.asProver(() => {
+        console.log(
+          `updateIndex: ${updateIndex}, updateNFTHash: ${updateNFTHash}`
+        );
+      });
       deepSubTree.update(updateIndex, updateNFTHash);
     }
 

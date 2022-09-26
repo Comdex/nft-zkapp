@@ -117,7 +117,6 @@ async function test() {
     zkapp,
     fromActionHash,
     endActionHash,
-    nftsCommitment,
     lastIndex,
     currentIndex
   );
@@ -125,9 +124,14 @@ async function test() {
   // root must be equal
   if (rollupCompletedRoot1.toString() === indexerUpdateRoot1.toString()) {
     console.log('rollup 1 commitment results match');
+    console.log(
+      '----------------------------------------------------------------'
+    );
   } else {
     throw new Error('rollup 1 execution error');
   }
+
+  // ------------------------------------------------------------------------
 
   let nft1 = await getNFTFromIndexer(1n);
   console.log('nft1: ', nft1.toPlainJsObj());
@@ -186,7 +190,6 @@ async function test() {
     zkapp,
     fromActionHash,
     endActionHash,
-    nftsCommitment,
     lastIndex,
     currentIndex
   );

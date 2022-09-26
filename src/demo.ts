@@ -15,15 +15,34 @@ import { NFT, NFTData } from './models/nft';
 
 await isReady;
 
-let fs = Encoding.Bijective.Fp
-  .fromString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1"><text x="0" y="15" fill="red"></text></svg>
-`);
+// let fs = Encoding.Bijective.Fp
+//   .fromString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1"><text x="0" y="15" fill="red"></text></svg>
+// `);
 
-let str = Encoding.Bijective.Fp.toString(fs);
+// let str = Encoding.Bijective.Fp.toString(fs);
 
-let data = NFTData.generate('hello world!', PrivateKey.random().toPublicKey());
+// let data = NFTData.generate('hello world!', PrivateKey.random().toPublicKey());
 
-console.log('str: ', data.getNFTString());
+// console.log('str: ', data.getNFTString());
+
+let priKey = PrivateKey.random();
+let pubKey = priKey.toPublicKey();
+
+let nft1 = NFT.createNFTwithoutID('test1', pubKey);
+let nft2 = NFT.createNFTwithoutID('test2', pubKey);
+
+let check1 = nft1.data.ownerSecret.checkOwner(priKey);
+console.log('check1 pass');
+let check2 = nft1.data.ownerSecret.checkOwner(priKey);
+console.log('check2 pass');
+let check3 = nft2.data.ownerSecret.checkOwner(priKey);
+console.log('check3 pass');
+let check4 = nft2.data.ownerSecret.checkOwner(priKey);
+console.log('check4 pass');
+
+console.log(
+  `${check1.toString()}, ${check2.toString()}, ${check3.toString()}, ${check4.toString()}`
+);
 
 // let tree = await NumIndexSparseMerkleTree.buildNewTree<NFT>(
 //   new MemoryStore(),

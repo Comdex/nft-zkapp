@@ -28,7 +28,6 @@ async function indexerUpdate(
   zkapp: NftZkapp,
   fromActionHash: Field,
   endActionHash: Field,
-  nftsCommitment: Field,
   lastIndex: Field,
   currentIndex: Field
 ): Promise<Field> {
@@ -36,7 +35,6 @@ async function indexerUpdate(
   let root = await updateIndexerMerkleTree(
     merkleTree,
     pendingActions,
-    nftsCommitment,
     lastIndex,
     currentIndex
   );
@@ -99,28 +97,40 @@ function getIndexes(pendingActions: Action[], currentIndex: Field): bigint[] {
 async function updateIndexerMerkleTree(
   tree: NumIndexSparseMerkleTree<NFT>,
   pendingActions: Action[],
-  nftsCommitment: Field,
   lastIndex: Field,
   currentIndex: Field
 ): Promise<Field> {
   let root = tree.getRoot();
+  let lastNftsCommitment = root;
+  console.log('currentRoot: ', root.toString());
   let curPos = lastIndex;
+
+  let proofs: Map<bigint, MerkleProof> = new Map();
   for (let i = 0; i < pendingActions.length; i++) {
     let action = pendingActions[i];
+    let id = action.nft.id.toBigInt();
+    let proof = await tree.prove(id);
+    proofs.set(id, proof);
+  }
+
+  for (let i = 0; i < pendingActions.length; i++) {
+    let action = pendingActions[i];
+    let currentId = action.nft.id;
     if (action.isMint().toBoolean() && curPos.lte(currentIndex).toBoolean()) {
       curPos = curPos.add(1);
       console.log('indexer-mint nft id: ', curPos.toString());
       root = await tree.update(curPos.toBigInt(), action.nft.assignId(curPos));
     } else {
       // transfer action
-      let proof = await tree.prove(action.nft.id.toBigInt());
-      console.log('indexer-transfer nft id: ', action.nft.id.toString());
+      let proof = proofs.get(currentId.toBigInt())!;
+      console.log('indexer-transfer nft id: ', currentId.toString());
       let isMember = proof.verifyByField(
-        nftsCommitment,
+        lastNftsCommitment,
         action.originalNFTHash
       );
       if (isMember) {
-        root = await tree.update(currentIndex.toBigInt(), action.nft);
+        console.log('nft isMember, id: ', currentId.toString());
+        root = await tree.update(currentId.toBigInt(), action.nft);
       }
     }
   }

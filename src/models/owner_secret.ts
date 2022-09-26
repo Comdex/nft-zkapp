@@ -1,6 +1,7 @@
 import {
   arrayProp,
   Bool,
+  Circuit,
   CircuitValue,
   Encryption,
   Field,
@@ -29,11 +30,24 @@ class OwnerSecret extends CircuitValue {
     let newFields = this.toFields().map((v) => v);
     let newOwner = PublicKey.fromGroup(this.owner.toGroup());
     const cipherText = Encryption.encrypt(newFields, newOwner);
+    Circuit.asProver(() => {
+      console.log('encrypt ciphertext: ', plainObj(cipherText));
+    });
     return new OwnerSecretCipherText(
       cipherText.publicKey,
       cipherText.cipherText
     );
   }
+}
+
+function plainObj(obj: { publicKey: Group; cipherText: Field[] }): any {
+  return {
+    publicKey: {
+      x: obj.publicKey.x.toString(),
+      y: obj.publicKey.y.toString(),
+    },
+    cipherText: obj.cipherText.toString(),
+  };
 }
 
 const CIPHER_TEXT_LENGTH = OwnerSecret.sizeInFields() + 1;
@@ -66,10 +80,24 @@ class OwnerSecretCipherText extends CircuitValue {
     let newCipherText: Field[] = this.cipherText.map((v) => v);
     let newPublicKey = Group.ofFields([this.publicKey.x, this.publicKey.y]);
 
+    Circuit.asProver(() => {
+      console.log(
+        'decrypt ciphertext: ',
+        plainObj({
+          publicKey: newPublicKey,
+          cipherText: newCipherText,
+        })
+      );
+    });
+
     const decryptedFields = Encryption.decrypt(
       { publicKey: newPublicKey, cipherText: newCipherText },
       ownerPrivateKey
     );
+
+    Circuit.asProver(() => {
+      console.log('decrypt success');
+    });
     return OwnerSecret.ofFields(decryptedFields);
   }
 
