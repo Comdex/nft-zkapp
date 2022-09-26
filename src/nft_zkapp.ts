@@ -97,15 +97,13 @@ class NftZkapp extends SmartContract {
       console.log('dummy id check success');
     });
 
-    nft.data.ownerSecret.checkOwner(senderKey).assertTrue();
+    nft.checkOwner(senderKey).assertTrue();
     Circuit.asProver(() => {
       console.log('nft owner check success');
     });
 
     const originalNFTHash = nft.hash();
-    Circuit.asProver(() => {
-      console.log('prepare new Owner');
-    });
+
     let newNft = nft.clone();
     newNft.data.ownerSecret = new OwnerSecret(receiver).encrypt();
 

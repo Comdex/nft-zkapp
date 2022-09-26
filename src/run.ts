@@ -15,7 +15,7 @@ import {
 import { NFT } from './models/nft';
 import { NftZkapp } from './nft_zkapp';
 
-const doProofs = false;
+const doProofs = true;
 let Local = Mina.LocalBlockchain();
 Mina.setActiveInstance(Local);
 
@@ -95,6 +95,7 @@ async function test() {
   let proofStore = await getProofsByIndexes(indexes);
   zkapp.setProofStore(proofStore);
   tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.setProofStore(proofStore);
     zkapp.rollup();
     if (!doProofs) zkapp.sign(zkappKey);
   });
@@ -168,6 +169,7 @@ async function test() {
   zkapp.setProofStore(proofStore);
 
   tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.setProofStore(proofStore);
     zkapp.rollup();
     if (!doProofs) zkapp.sign(zkappKey);
   });

@@ -1,11 +1,13 @@
 import { createEmptyValue } from 'snarky-smt';
 import {
   arrayProp,
+  Bool,
   CircuitValue,
   Encoding,
   Field,
   isReady,
   Poseidon,
+  PrivateKey,
   prop,
   PublicKey,
 } from 'snarkyjs';
@@ -95,6 +97,10 @@ class NFT extends CircuitValue {
   assignId(id: Field): NFT {
     this.id = id;
     return this;
+  }
+
+  checkOwner(ownerPrivateKey: PrivateKey): Bool {
+    return this.data.ownerSecret.checkOwner(ownerPrivateKey);
   }
 
   clone(): NFT {
