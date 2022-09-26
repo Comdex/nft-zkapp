@@ -15,7 +15,7 @@ import {
 import { NFT } from './models/nft';
 import { NftZkapp } from './nft_zkapp';
 
-const doProofs = true;
+const doProofs = false;
 let Local = Mina.LocalBlockchain();
 Mina.setActiveInstance(Local);
 
