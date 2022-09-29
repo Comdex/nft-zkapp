@@ -1,6 +1,8 @@
 import { SMT_EMPTY_VALUE } from 'snarky-smt';
-import { NumIndexSparseMerkleProof } from 'snarky-smt';
-import { NumIndexDeepSparseMerkleSubTreeForField } from 'snarky-smt/build/module/lib/deep_subtree';
+import {
+  NumIndexSparseMerkleProof,
+  NumIndexDeepSparseMerkleSubTreeForField,
+} from 'snarky-smt';
 import {
   Field,
   SmartContract,
@@ -23,8 +25,9 @@ import { merkleTree } from './indexer';
 import { Action } from './models/action';
 import { DUMMY_NFT_ID, NFT } from './models/nft';
 import { OwnerSecret } from './models/owner_secret';
+import { MerkleProof, Proofs } from './models/proofs';
 
-export { NftZkapp, MerkleProof };
+export { NftZkapp };
 
 const initCommitment = merkleTree.getRoot();
 const initIndex = Field.zero;
@@ -32,7 +35,6 @@ const nftName = 'MinaGenesis';
 const nftSymbol = 'MG';
 
 console.log('initCommitment: ', initCommitment.toString());
-class MerkleProof extends NumIndexSparseMerkleProof(treeHeight) {}
 
 class NftZkapp extends SmartContract {
   reducer = Experimental.Reducer({ actionType: Action });
@@ -97,7 +99,7 @@ class NftZkapp extends SmartContract {
       console.log('dummy id check success');
     });
 
-    nft.checkOwner(senderKey).assertTrue();
+    //nft.checkOwner(senderKey).assertTrue();
     Circuit.asProver(() => {
       console.log('nft owner check success');
     });
@@ -111,12 +113,13 @@ class NftZkapp extends SmartContract {
   }
 
   @method
-  rollup() {
+  rollup(proofs: Proofs) {
     let nftsCommitment = this.nftsCommitment.get();
     this.nftsCommitment.assertEquals(nftsCommitment);
 
     Circuit.asProver(() => {
       console.log('rollup-nftsCommitment: ', nftsCommitment.toString());
+      console.log('proofs length: ', proofs.arr.length);
     });
 
     let lastIndex = this.lastIndex.get();
@@ -144,23 +147,37 @@ class NftZkapp extends SmartContract {
 
     let actions: Action[] = [];
     let finalIdxs: Field[] = [];
-    let proofs: MerkleProof[] = [];
+
+    // let finalProofs: MerkleProof[] = [];
+    // let proofStore = new Map<bigint, MerkleProof>();
+    // Circuit.asProver(() => {
+    //   proofs.arr.forEach((v) => {
+    //     proofStore.set(v.index.toBigInt(), v.proof);
+    //   });
+    // });
 
     let deepSubTree = new NumIndexDeepSparseMerkleSubTreeForField(
       nftsCommitment,
       treeHeight
     );
 
-    let dummyProof = Circuit.witness(MerkleProof, () => {
-      let proof = this.proofStore.get(0n);
-      if (proof === undefined) {
-        throw new Error(`Merkle Proof with index: 0 could not be found`);
-      }
-
-      return proof.toConstant();
+    Circuit.asProver(() => {
+      console.log('start get dummyProof');
     });
+
+    // let dummyProof = Circuit.witness(MerkleProof, () => {
+    //   let proof = this.proofStore.get(0n);
+    //   if (proof === undefined) {
+    //     throw new Error(`Merkle Proof with index: 0 could not be found`);
+    //   }
+
+    //   return proof.toConstant();
+    // });
+    let dummyProof = proofs.arr[0].proof;
+
     deepSubTree.addBranch(dummyProof, SMT_EMPTY_VALUE);
 
+    let pos = 1;
     let { state: newCurrentIndex, actionsHash: newActionsHash } =
       this.reducer.reduce(
         pendingActions,
@@ -177,17 +194,19 @@ class NftZkapp extends SmartContract {
           let finalIdx = Circuit.if(action.isDummyData(), DUMMY_NFT_ID, idx2);
           finalIdxs.push(finalIdx);
 
-          let merkleProof = Circuit.witness(MerkleProof, () => {
-            let idxNum = finalIdx.toBigInt();
-            let proof = this.proofStore.get(idxNum);
-            if (proof === undefined) {
-              throw new Error(
-                `Merkle Proof with index: ${idxNum} could not be found`
-              );
-            }
-            return proof.toConstant();
-          });
-          proofs.push(merkleProof);
+          // let merkleProof = Circuit.witness(MerkleProof, () => {
+          //   let idxNum = finalIdx.toBigInt();
+          //   let proof = proofStore.get(idxNum);
+          //   if (proof === undefined) {
+          //     throw new Error(
+          //       `Merkle Proof with index: ${idxNum} could not be found`
+          //     );
+          //   }
+          //   return proof.toConstant();
+          // });
+          // finalProofs.push(merkleProof);
+          let merkleProof = proofs.arr[pos].proof;
+          pos = pos + 1;
 
           deepSubTree.addBranch(merkleProof, action.originalNFTHash);
           return newCurIdx;
@@ -207,7 +226,8 @@ class NftZkapp extends SmartContract {
       //   console.log('update status, action: ', action.toString());
       // });
 
-      let membershipProof = proofs[i];
+      //let membershipProof = finalProofs[i];
+      let membershipProof = proofs.arr[i + 1].proof;
 
       let [updateIndex, updateNFTHash] = Circuit.if(
         action.isMint(),

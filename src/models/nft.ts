@@ -27,10 +27,6 @@ class NFTData extends CircuitValue {
 
   constructor(content: Field[], ownerSecret: OwnerSecretCipherText) {
     super();
-    for (let i = content.length; i < MAX_CONTENT_LENGTH; i++) {
-      content.push(DUMMY_DATA_FIELD);
-    }
-
     this.content = content;
     this.ownerSecret = ownerSecret;
   }
@@ -41,6 +37,9 @@ class NFTData extends CircuitValue {
       throw new Error('The character limit is exceeded');
     }
 
+    for (let i = fs.length; i < MAX_CONTENT_LENGTH; i++) {
+      fs.push(DUMMY_DATA_FIELD);
+    }
     return new NFTData(fs, new OwnerSecret(owner).encrypt());
   }
 

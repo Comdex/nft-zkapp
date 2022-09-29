@@ -3,7 +3,8 @@ import { Field } from 'snarkyjs';
 import { treeHeight } from './constant';
 import { Action } from './models/action';
 import { NFT } from './models/nft';
-import { MerkleProof, NftZkapp } from './nft_zkapp';
+import { MerkleProof, Proofs, ProofWithIndex } from './models/proofs';
+import { NftZkapp } from './nft_zkapp';
 
 export {
   getProofsByIndexes,
@@ -43,16 +44,22 @@ async function indexerUpdate(
 
 async function getProofsByIndexes(
   indexes: bigint[]
-): Promise<Map<bigint, MerkleProof>> {
+): Promise<{ store: Map<bigint, MerkleProof>; arr: ProofWithIndex[] }> {
   let proofStore = new Map<bigint, MerkleProof>();
-
+  let proofs = [];
   for (let i = 0; i < indexes.length; i++) {
     let id = indexes[i];
     let proof = await merkleTree.prove(id);
     proofStore.set(id, proof);
+    proofs.push(new ProofWithIndex(Field(id), proof));
   }
 
-  return proofStore;
+  //let zeroProof = await merkleTree.prove(0n);
+  for (let i = proofs.length; i < 33; i++) {
+    proofs.push(new ProofWithIndex(Field.zero, proofs[0].proof));
+  }
+
+  return { store: proofStore, arr: proofs };
 }
 
 function getPendingActions(
@@ -115,8 +122,12 @@ async function updateIndexerMerkleTree(
 
   for (let i = 0; i < pendingActions.length; i++) {
     let action = pendingActions[i];
+
     let currentId = action.nft.id;
-    if (action.isMint().toBoolean() && curPos.lte(currentIndex).toBoolean()) {
+    if (
+      action.isMint().toBoolean() &&
+      curPos.toBigInt() <= currentIndex.toBigInt()
+    ) {
       curPos = curPos.add(1);
       console.log('indexer-mint nft id: ', curPos.toString());
       root = await tree.update(curPos.toBigInt(), action.nft.assignId(curPos));

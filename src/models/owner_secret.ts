@@ -5,7 +5,6 @@ import {
   CircuitValue,
   Encryption,
   Field,
-  Group,
   isReady,
   PrivateKey,
   prop,
@@ -32,7 +31,7 @@ class OwnerSecret extends CircuitValue {
     const cipherText = Encryption.encrypt(newFields, newOwner);
 
     return new OwnerSecretCipherText(
-      cipherText.publicKey,
+      PublicKey.fromGroup(cipherText.publicKey),
       cipherText.cipherText
     );
   }
@@ -41,10 +40,10 @@ class OwnerSecret extends CircuitValue {
 const CIPHER_TEXT_LENGTH = OwnerSecret.sizeInFields() + 1;
 
 class OwnerSecretCipherText extends CircuitValue {
-  @prop publicKey: Group;
+  @prop publicKey: PublicKey;
   @arrayProp(Field, CIPHER_TEXT_LENGTH) cipherText: Field[];
 
-  constructor(publicKey: Group, cipherText: Field[]) {
+  constructor(publicKey: PublicKey, cipherText: Field[]) {
     super();
     this.publicKey = publicKey;
     this.cipherText = cipherText;
@@ -66,7 +65,7 @@ class OwnerSecretCipherText extends CircuitValue {
 
   decrypt(ownerPrivateKey: PrivateKey): OwnerSecret {
     let newCipherText: Field[] = this.cipherText.map((v) => v);
-    let newPublicKey = Group.ofFields([this.publicKey.x, this.publicKey.y]);
+    let newPublicKey = this.publicKey.toGroup();
 
     const decryptedFields = Encryption.decrypt(
       { publicKey: newPublicKey, cipherText: newCipherText },

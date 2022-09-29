@@ -24,6 +24,8 @@ await isReady;
 // let data = NFTData.generate('hello world!', PrivateKey.random().toPublicKey());
 
 // console.log('str: ', data.getNFTString());
+const str = process.cwd();
+console.log('path: ', str);
 
 let priKey = PrivateKey.random();
 let pubKey = priKey.toPublicKey();

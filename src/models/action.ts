@@ -1,4 +1,4 @@
-import { SMT_EMPTY_VALUE } from 'snarky-smt';
+import { createEmptyValue, SMT_EMPTY_VALUE } from 'snarky-smt';
 import { Bool, CircuitValue, Field, isReady, prop } from 'snarkyjs';
 import { NFT } from './nft';
 
@@ -13,8 +13,8 @@ const DUMMY_ORIGINALNFTHASH = SMT_EMPTY_VALUE;
 
 class Action extends CircuitValue {
   @prop type: Field;
-  @prop nft: NFT;
   @prop originalNFTHash: Field;
+  @prop nft: NFT;
 
   constructor(type: Field, nft: NFT, originalNFTHash: Field) {
     super();
@@ -49,5 +49,9 @@ class Action extends CircuitValue {
 
   static transfer(nft: NFT, originalNFTHash: Field) {
     return new Action(ACTION_TYPE_TRANSFER, nft, originalNFTHash);
+  }
+
+  static empty(): Action {
+    return createEmptyValue(Action);
   }
 }

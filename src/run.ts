@@ -13,9 +13,10 @@ import {
   indexerUpdate,
 } from './indexer';
 import { NFT } from './models/nft';
+import { Proofs } from './models/proofs';
 import { NftZkapp } from './nft_zkapp';
 
-const doProofs = false;
+const doProofs = true;
 let Local = Mina.LocalBlockchain();
 Mina.setActiveInstance(Local);
 
@@ -92,15 +93,18 @@ async function test() {
   console.log('pendingActions: ', pendingActions.toString());
   let indexes = getIndexes(pendingActions, currentIndex);
   console.log('indexes: ', indexes.toString());
-  let proofStore = await getProofsByIndexes(indexes);
-  zkapp.setProofStore(proofStore);
+  let { store: proofStore, arr } = await getProofsByIndexes(indexes);
+  let proofs = new Proofs(arr);
+  //zkapp.setProofStore(proofStore);
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.setProofStore(proofStore);
-    zkapp.rollup();
+    //zkapp.setProofStore(proofStore);
+    zkapp.rollup(proofs);
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
+
+  console.log('zkapp rollup end');
 
   let rollupCompletedRoot1 = zkapp.nftsCommitment.get();
   console.log('rollupCompletedRoot1: ', rollupCompletedRoot1.toString());
@@ -165,12 +169,12 @@ async function test() {
   console.log('second rollup - pendingActions: ', pendingActions.toString());
   indexes = getIndexes(pendingActions, currentIndex);
   console.log('second rollup - indexes: ', indexes.toString());
-  proofStore = await getProofsByIndexes(indexes);
-  zkapp.setProofStore(proofStore);
+  let { store: proofStore2, arr: arr2 } = await getProofsByIndexes(indexes);
+  let proofs2 = new Proofs(arr2);
 
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.setProofStore(proofStore);
-    zkapp.rollup();
+    //zkapp.setProofStore(proofStore2);
+    zkapp.rollup(proofs2);
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
