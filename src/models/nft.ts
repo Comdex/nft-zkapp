@@ -23,24 +23,16 @@ const MAX_CONTENT_LENGTH = 2;
 
 class NFTData extends CircuitValue {
   @arrayProp(Field, MAX_CONTENT_LENGTH) content: Field[];
-  @prop ownerSecret: OwnerSecretCipherText;
 
-  constructor(content: Field[], ownerSecret: OwnerSecretCipherText) {
+  constructor(content: Field[]) {
     super();
-    this.content = content;
-    this.ownerSecret = ownerSecret;
-  }
-
-  static generate(str: string, owner: PublicKey): NFTData {
-    let fs = Encoding.Bijective.Fp.fromString(str);
-    if (fs.length > MAX_CONTENT_LENGTH) {
+    if (content.length > MAX_CONTENT_LENGTH) {
       throw new Error('The character limit is exceeded');
     }
-
-    for (let i = fs.length; i < MAX_CONTENT_LENGTH; i++) {
-      fs.push(DUMMY_DATA_FIELD);
+    for (let i = content.length; i < MAX_CONTENT_LENGTH; i++) {
+      content.push(DUMMY_DATA_FIELD);
     }
-    return new NFTData(fs, new OwnerSecret(owner).encrypt());
+    this.content = content;
   }
 
   hash(): Field {
@@ -49,8 +41,7 @@ class NFTData extends CircuitValue {
 
   clone(): NFTData {
     let newContent = this.content.map((v) => v);
-    let newOwnerSecret = this.ownerSecret.clone();
-    return new NFTData(newContent, newOwnerSecret);
+    return new NFTData(newContent);
   }
 
   getNFTString(): string {
@@ -66,31 +57,39 @@ class NFTData extends CircuitValue {
     return Encoding.Bijective.Fp.toString(realStr);
   }
 
-  toPlainJsObj(): any {
+  toPretty(): any {
     return {
       content: this.content.toString(),
-      ownerSecret: this.ownerSecret.toPlainJsObj(),
     };
   }
 }
 
 class NFT extends CircuitValue {
   @prop id: Field;
+  @prop ownerSecret: OwnerSecretCipherText;
   @prop data: NFTData;
 
-  private constructor(id: Field, data: NFTData) {
+  private constructor(
+    id: Field,
+    ownerSecret: OwnerSecretCipherText,
+    data: NFTData
+  ) {
     super();
     this.id = id;
+    this.ownerSecret = ownerSecret;
     this.data = data;
   }
 
-  static createNFTwithoutID(str: string, owner: PublicKey): NFT {
-    let nftData = NFTData.generate(str, owner);
-    return new NFT(DUMMY_NFT_ID, nftData);
+  static createNFT(str: string, owner: PublicKey): NFT {
+    let fs = Encoding.Bijective.Fp.fromString(str);
+    let nftData = new NFTData(fs);
+    let ownerSecret = new OwnerSecret(owner).encrypt();
+    return new NFT(DUMMY_NFT_ID, ownerSecret, nftData);
   }
 
-  static empty(): NFT {
-    return new NFT(DUMMY_NFT_ID, createEmptyValue(NFTData));
+  changeOwner(newOwner: PublicKey): NFT {
+    this.ownerSecret = new OwnerSecret(newOwner).encrypt();
+    return this;
   }
 
   assignId(id: Field): NFT {
@@ -98,12 +97,16 @@ class NFT extends CircuitValue {
     return this;
   }
 
+  isAssignedId(): Bool {
+    return this.id.equals(DUMMY_NFT_ID).not();
+  }
+
   checkOwner(ownerPrivateKey: PrivateKey): Bool {
-    return this.data.ownerSecret.checkOwner(ownerPrivateKey);
+    return this.ownerSecret.checkOwner(ownerPrivateKey);
   }
 
   clone(): NFT {
-    return new NFT(this.id, this.data.clone());
+    return new NFT(this.id, this.ownerSecret.clone(), this.data.clone());
   }
 
   hash(): Field {
@@ -114,10 +117,14 @@ class NFT extends CircuitValue {
     return this.data.getNFTString();
   }
 
-  toPlainJsObj(): any {
+  toPretty(): any {
     return {
       id: this.id.toString(),
-      data: this.data.toPlainJsObj(),
+      data: this.data.toPretty(),
     };
+  }
+
+  static empty(): NFT {
+    return createEmptyValue(NFT);
   }
 }

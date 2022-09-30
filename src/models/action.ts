@@ -16,11 +16,11 @@ class Action extends CircuitValue {
   @prop originalNFTHash: Field;
   @prop nft: NFT;
 
-  constructor(type: Field, nft: NFT, originalNFTHash: Field) {
+  constructor(type: Field, originalNFTHash: Field, nft: NFT) {
     super();
     this.type = type;
-    this.nft = nft;
     this.originalNFTHash = originalNFTHash;
+    this.nft = nft;
   }
 
   isMint(): Bool {
@@ -35,23 +35,19 @@ class Action extends CircuitValue {
     return this.type.equals(ACTION_TYPE_DUMMY);
   }
 
-  toString(): string {
-    return JSON.stringify({
+  toPretty(): any {
+    return {
       type: this.type.toString(),
-      nft: this.nft.toPlainJsObj(),
+      nft: this.nft.toPretty(),
       originalNFTHash: this.originalNFTHash.toString(),
-    });
+    };
   }
 
   static mint(nft: NFT): Action {
-    return new Action(ACTION_TYPE_MINT, nft, DUMMY_ORIGINALNFTHASH);
+    return new Action(ACTION_TYPE_MINT, DUMMY_ORIGINALNFTHASH, nft);
   }
 
   static transfer(nft: NFT, originalNFTHash: Field) {
-    return new Action(ACTION_TYPE_TRANSFER, nft, originalNFTHash);
-  }
-
-  static empty(): Action {
-    return createEmptyValue(Action);
+    return new Action(ACTION_TYPE_TRANSFER, originalNFTHash, nft);
   }
 }

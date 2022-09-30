@@ -30,16 +30,16 @@ console.log('path: ', str);
 let priKey = PrivateKey.random();
 let pubKey = priKey.toPublicKey();
 
-let nft1 = NFT.createNFTwithoutID('test1', pubKey);
-let nft2 = NFT.createNFTwithoutID('test2', pubKey);
+let nft1 = NFT.createNFT('test1', pubKey);
+let nft2 = NFT.createNFT('test2', pubKey);
 
-let check1 = nft1.data.ownerSecret.checkOwner(priKey);
+let check1 = nft1.checkOwner(priKey);
 console.log('check1 pass');
-let check2 = nft1.data.ownerSecret.checkOwner(priKey);
+let check2 = nft1.checkOwner(priKey);
 console.log('check2 pass');
-let check3 = nft2.data.ownerSecret.checkOwner(priKey);
+let check3 = nft2.checkOwner(priKey);
 console.log('check3 pass');
-let check4 = nft2.data.ownerSecret.checkOwner(priKey);
+let check4 = nft2.checkOwner(priKey);
 console.log('check4 pass');
 
 console.log(

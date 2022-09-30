@@ -1,8 +1,5 @@
 import { SMT_EMPTY_VALUE } from 'snarky-smt';
-import {
-  NumIndexSparseMerkleProof,
-  NumIndexDeepSparseMerkleSubTreeForField,
-} from 'snarky-smt';
+import { NumIndexDeepSparseMerkleSubTreeForField } from 'snarky-smt';
 import {
   Field,
   SmartContract,
@@ -10,21 +7,16 @@ import {
   State,
   method,
   DeployArgs,
-  Permissions,
   Experimental,
   PublicKey,
   Circuit,
-  Mina,
   PrivateKey,
-  AccountUpdate,
-  shutdown,
   CircuitString,
 } from 'snarkyjs';
-import { treeHeight } from './constant';
+import { TREE_HEIGHT } from './constant';
 import { merkleTree } from './indexer';
 import { Action } from './models/action';
 import { DUMMY_NFT_ID, NFT } from './models/nft';
-import { OwnerSecret } from './models/owner_secret';
 import { MerkleProof, Proofs } from './models/proofs';
 
 export { NftZkapp };
@@ -37,6 +29,9 @@ const nftSymbol = 'MG';
 console.log('initCommitment: ', initCommitment.toString());
 
 class NftZkapp extends SmartContract {
+  // constant supply
+  SUPPLY = Field.fromNumber(1000);
+
   reducer = Experimental.Reducer({ actionType: Action });
 
   @state(Field) nftsCommitment = State<Field>();
@@ -81,9 +76,18 @@ class NftZkapp extends SmartContract {
     return '';
   }
 
+  canMint(): boolean {
+    let currentIndex = this.currentIndex.get();
+    if (currentIndex.toBigInt() < this.SUPPLY.toBigInt()) {
+      return true;
+    }
+
+    return false;
+  }
+
   @method
   mint(nft: NFT) {
-    nft.id.assertEquals(DUMMY_NFT_ID);
+    nft.isAssignedId().assertFalse();
     this.reducer.dispatch(Action.mint(nft));
   }
 
@@ -91,25 +95,28 @@ class NftZkapp extends SmartContract {
   transfer(receiver: PublicKey, nft: NFT, senderKey: PrivateKey) {
     Circuit.asProver(() => {
       console.log('receiver: ', receiver.toBase58());
-      console.log('senderKey: ', senderKey.toBase58());
-      console.log('transfer nft: ', nft.toPlainJsObj());
+      //console.log('senderKey: ', senderKey.toBase58());
+      //console.log('transfer nft: ', nft.toPretty());
     });
-    nft.id.equals(DUMMY_NFT_ID).assertFalse();
+    nft.isAssignedId().assertTrue();
     Circuit.asProver(() => {
       console.log('dummy id check success');
     });
 
+    //TODO: Due to a bug in the decryption of snarkyjs, this assertion is not enabled for the time being
     //nft.checkOwner(senderKey).assertTrue();
+    senderKey.toPublicKey().equals(receiver).assertFalse();
+
     Circuit.asProver(() => {
       console.log('nft owner check success');
     });
 
     const originalNFTHash = nft.hash();
 
-    let newNft = nft.clone();
-    newNft.data.ownerSecret = new OwnerSecret(receiver).encrypt();
+    //TODO: a bug to fix
+    //nft.changeOwner(receiver);
 
-    this.reducer.dispatch(Action.transfer(newNft, originalNFTHash));
+    this.reducer.dispatch(Action.transfer(nft, originalNFTHash));
   }
 
   @method
@@ -141,43 +148,20 @@ class NftZkapp extends SmartContract {
       console.log('zkapp status assert success');
     });
 
+    let deepSubTree = new NumIndexDeepSparseMerkleSubTreeForField(
+      nftsCommitment,
+      TREE_HEIGHT
+    );
+    let dummyProof = proofs.arr[0];
+    deepSubTree.addBranch(dummyProof, SMT_EMPTY_VALUE);
+
     let pendingActions = this.reducer.getActions({
       fromActionHash: currentActionsHash,
     });
-
     let actions: Action[] = [];
     let finalIdxs: Field[] = [];
 
-    // let finalProofs: MerkleProof[] = [];
-    // let proofStore = new Map<bigint, MerkleProof>();
-    // Circuit.asProver(() => {
-    //   proofs.arr.forEach((v) => {
-    //     proofStore.set(v.index.toBigInt(), v.proof);
-    //   });
-    // });
-
-    let deepSubTree = new NumIndexDeepSparseMerkleSubTreeForField(
-      nftsCommitment,
-      treeHeight
-    );
-
-    Circuit.asProver(() => {
-      console.log('start get dummyProof');
-    });
-
-    // let dummyProof = Circuit.witness(MerkleProof, () => {
-    //   let proof = this.proofStore.get(0n);
-    //   if (proof === undefined) {
-    //     throw new Error(`Merkle Proof with index: 0 could not be found`);
-    //   }
-
-    //   return proof.toConstant();
-    // });
-    let dummyProof = proofs.arr[0].proof;
-
-    deepSubTree.addBranch(dummyProof, SMT_EMPTY_VALUE);
-
-    let pos = 1;
+    let currPos = 1;
     let { state: newCurrentIndex, actionsHash: newActionsHash } =
       this.reducer.reduce(
         pendingActions,
@@ -188,27 +172,24 @@ class NftZkapp extends SmartContract {
           //   console.log('curAction: ', action.toString());
           // });
           actions.push(action);
-
-          let newCurIdx = Circuit.if(action.isMint(), curIdx.add(1), curIdx);
-          let idx2 = Circuit.if(action.isTransfer(), action.nft.id, newCurIdx);
+          let newCurIdx = Circuit.if(
+            action.isMint().and(curIdx.lt(this.SUPPLY)),
+            curIdx.add(1),
+            curIdx
+          );
+          let idx1 = Circuit.if(
+            curIdx.lt(this.SUPPLY),
+            newCurIdx,
+            DUMMY_NFT_ID
+          );
+          let idx2 = Circuit.if(action.isTransfer(), action.nft.id, idx1);
           let finalIdx = Circuit.if(action.isDummyData(), DUMMY_NFT_ID, idx2);
           finalIdxs.push(finalIdx);
 
-          // let merkleProof = Circuit.witness(MerkleProof, () => {
-          //   let idxNum = finalIdx.toBigInt();
-          //   let proof = proofStore.get(idxNum);
-          //   if (proof === undefined) {
-          //     throw new Error(
-          //       `Merkle Proof with index: ${idxNum} could not be found`
-          //     );
-          //   }
-          //   return proof.toConstant();
-          // });
-          // finalProofs.push(merkleProof);
-          let merkleProof = proofs.arr[pos].proof;
-          pos = pos + 1;
-
+          let merkleProof = proofs.arr[currPos];
+          currPos = currPos + 1;
           deepSubTree.addBranch(merkleProof, action.originalNFTHash);
+
           return newCurIdx;
         },
         { state: currentIndex, actionsHash: currentActionsHash }
@@ -222,19 +203,31 @@ class NftZkapp extends SmartContract {
       let action = actions[i];
       let finalIdx = finalIdxs[i];
 
-      // Circuit.asProver(() => {
-      //   console.log('update status, action: ', action.toString());
-      // });
+      let membershipProof = proofs.arr[i + 1];
 
-      //let membershipProof = finalProofs[i];
-      let membershipProof = proofs.arr[i + 1].proof;
-
+      // let [updateIndex, updateNFTHash] = Circuit.if(
+      //   action.isMint(),
+      //   [finalIdx, action.nft.assignId(finalIdx).hash()],
+      //   Circuit.if(
+      //     action.isDummyData(),
+      //     [DUMMY_NFT_ID, SMT_EMPTY_VALUE],
+      //     // Check whether the transfer is valid
+      //     Circuit.if(
+      //       membershipProof.verifyByFieldInCircuit(
+      //         nftsCommitment,
+      //         action.originalNFTHash
+      //       ),
+      //       [finalIdx, action.nft.hash()],
+      //       [DUMMY_NFT_ID, SMT_EMPTY_VALUE]
+      //     )
+      //   )
+      // );
       let [updateIndex, updateNFTHash] = Circuit.if(
-        action.isMint(),
-        [finalIdx, action.nft.assignId(finalIdx).hash()],
+        finalIdx.equals(DUMMY_NFT_ID),
+        [finalIdx, SMT_EMPTY_VALUE],
         Circuit.if(
-          action.isDummyData(),
-          [DUMMY_NFT_ID, SMT_EMPTY_VALUE],
+          action.isMint(),
+          [finalIdx, action.nft.assignId(finalIdx).hash()],
           // Check whether the transfer is valid
           Circuit.if(
             membershipProof.verifyByFieldInCircuit(

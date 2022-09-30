@@ -31,6 +31,10 @@ let zkappAddress = zkappKey.toPublicKey();
 async function test() {
   let zkapp = new NftZkapp(zkappAddress);
 
+  //analyze methods
+  let result = NftZkapp.analyzeMethods();
+  console.log('analyze result: ', result);
+
   if (doProofs) {
     console.log('start compiling');
     console.time('compile');
@@ -58,26 +62,27 @@ async function test() {
 
   // mint nft
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 1', callerPublicKey));
+    zkapp.mint(NFT.createNFT('Mina Genesis 1', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
 
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 2', callerPublicKey));
+    zkapp.mint(NFT.createNFT('Mina Genesis 2', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
 
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.mint(NFT.createNFTwithoutID('Mina Genesis 3', callerPublicKey));
+    zkapp.mint(NFT.createNFT('Mina Genesis 3', callerPublicKey));
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
 
+  let supply = zkapp.SUPPLY;
   let fromActionHash = zkapp.lastActionsHash.get();
   let endActionHash = zkapp.currentActionsHash.get();
   let lastIndex = zkapp.lastIndex.get();
@@ -91,10 +96,10 @@ async function test() {
   // 1. execute the contract rollup method
   let pendingActions = getPendingActions(zkapp, endActionHash);
   console.log('pendingActions: ', pendingActions.toString());
-  let indexes = getIndexes(pendingActions, currentIndex);
+  let indexes = getIndexes(pendingActions, currentIndex, supply);
   console.log('indexes: ', indexes.toString());
-  let { store: proofStore, arr } = await getProofsByIndexes(indexes);
-  let proofs = new Proofs(arr);
+  let { store: proofStore, proofs } = await getProofsByIndexes(indexes);
+
   //zkapp.setProofStore(proofStore);
   tx = await Mina.transaction(feePayerKey, () => {
     //zkapp.setProofStore(proofStore);
@@ -123,7 +128,8 @@ async function test() {
     fromActionHash,
     endActionHash,
     lastIndex,
-    currentIndex
+    currentIndex,
+    supply
   );
   console.log('indexerUpdateRoot1: ', indexerUpdateRoot1.toString());
   // root must be equal
@@ -139,7 +145,7 @@ async function test() {
   // ------------------------------------------------------------------------
 
   let nft1 = await getNFTFromIndexer(1n);
-  console.log('nft1: ', nft1.toPlainJsObj());
+  console.log('nft1: ', nft1.toPretty());
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.transfer(receiverPublicKey, nft1, callerKey);
     if (!doProofs) zkapp.sign(zkappKey);
@@ -149,7 +155,7 @@ async function test() {
   console.log('nft1 transfer tx success');
 
   let nft2 = await getNFTFromIndexer(2n);
-  console.log('nft2: ', nft2.toPlainJsObj());
+  console.log('nft2: ', nft2.toPretty());
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.transfer(receiverPublicKey, nft2, callerKey);
     if (!doProofs) zkapp.sign(zkappKey);
@@ -167,10 +173,11 @@ async function test() {
   );
   pendingActions = getPendingActions(zkapp, endActionHash);
   console.log('second rollup - pendingActions: ', pendingActions.toString());
-  indexes = getIndexes(pendingActions, currentIndex);
+  indexes = getIndexes(pendingActions, currentIndex, supply);
   console.log('second rollup - indexes: ', indexes.toString());
-  let { store: proofStore2, arr: arr2 } = await getProofsByIndexes(indexes);
-  let proofs2 = new Proofs(arr2);
+  let { store: proofStore2, proofs: proofs2 } = await getProofsByIndexes(
+    indexes
+  );
 
   tx = await Mina.transaction(feePayerKey, () => {
     //zkapp.setProofStore(proofStore2);
@@ -197,7 +204,8 @@ async function test() {
     fromActionHash,
     endActionHash,
     lastIndex,
-    currentIndex
+    currentIndex,
+    supply
   );
   console.log('indexerUpdateRoot2: ', indexerUpdateRoot2.toString());
 
