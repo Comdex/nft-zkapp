@@ -11,12 +11,13 @@ import {
   PrivateKey,
   CircuitString,
 } from 'snarkyjs';
-import { ActionProof } from './action_prover';
-import { merkleTree } from './indexer';
+
 import { Action } from './models/action';
 import { NFT } from './models/nft';
-import { MerkleProof } from './models/proofs';
 import { RollupState } from './models/rollup_state';
+import { ActionProof } from './action_prover';
+import { merkleTree } from './global';
+import { NFT_SUPPLY } from './constant';
 
 export { NftZkapp };
 
@@ -29,7 +30,7 @@ console.log('initCommitment: ', initCommitment.toString());
 
 class NftZkapp extends SmartContract {
   // constant supply
-  static SUPPLY = Field.fromNumber(1000);
+  SUPPLY = Field.fromNumber(NFT_SUPPLY);
 
   reducer = Experimental.Reducer({ actionType: Action });
 
@@ -68,7 +69,7 @@ class NftZkapp extends SmartContract {
 
   canMint(): boolean {
     let currentIndex = this.state.get().currentIndex;
-    if (currentIndex.toBigInt() < NftZkapp.SUPPLY.toBigInt()) {
+    if (currentIndex.toBigInt() < this.SUPPLY.toBigInt()) {
       return true;
     }
 

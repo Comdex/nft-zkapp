@@ -1,17 +1,13 @@
-import { MemoryStore, NumIndexSparseMerkleTree } from 'snarky-smt';
+import { NumIndexSparseMerkleTree } from 'snarky-smt';
 import { Field } from 'snarkyjs';
-import { TREE_HEIGHT } from './constant';
+import { NFT_SUPPLY } from './constant';
+import { merkleTree } from './global';
 import { Action } from './models/action';
 import { NFT } from './models/nft';
 import { MerkleProof } from './models/proofs';
 import { NftZkapp } from './nft_zkapp';
 
-export { getPendingActions, merkleTree, getNFTFromIndexer, runIndexer };
-
-let merkleTree = await NumIndexSparseMerkleTree.buildNewTree<NFT>(
-  new MemoryStore(),
-  TREE_HEIGHT
-);
+export { getPendingActions, getNFTFromIndexer, runIndexer };
 
 async function getNFTFromIndexer(id: bigint): Promise<NFT> {
   let nft = await merkleTree.get(id);
@@ -19,7 +15,7 @@ async function getNFTFromIndexer(id: bigint): Promise<NFT> {
 }
 
 async function runIndexer(zkapp: NftZkapp): Promise<Field> {
-  let supply = NftZkapp.SUPPLY;
+  let supply = Field(NFT_SUPPLY);
   let currentState = zkapp.state.get();
   let fromActionHash = zkapp.lastActionsHash.get();
   let endActionHash = zkapp.currentActionsHash.get();

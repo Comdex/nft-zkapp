@@ -2,15 +2,17 @@ import {
   NumIndexDeepSparseMerkleSubTreeForField,
   SMT_EMPTY_VALUE,
 } from 'snarky-smt';
-import { Circuit, Experimental, Field, SelfProof } from 'snarkyjs';
+import { Circuit, Experimental, Field, isReady, SelfProof } from 'snarkyjs';
+import { NFT_SUPPLY } from './constant';
 import { Action } from './models/action';
 import { DUMMY_NFT_ID } from './models/nft';
 import { MerkleProof } from './models/proofs';
 import { RollupState } from './models/rollup_state';
 import { RollupStateTransition } from './models/rollup_state_transition';
-import { NftZkapp } from './nft_zkapp';
 
 export { NftActionProver, ActionProof, NftActionProverHelper };
+
+await isReady;
 
 let NftActionProver = Experimental.ZkProgram({
   publicInput: RollupStateTransition,
@@ -46,14 +48,14 @@ let NftActionProver = Experimental.ZkProgram({
         merkleProof.root.assertEquals(prevStateRoot);
 
         let newCurIdx = Circuit.if(
-          currAction.isMint().and(prevCurrIndex.lt(NftZkapp.SUPPLY)),
+          currAction.isMint().and(prevCurrIndex.lt(NFT_SUPPLY)),
           prevCurrIndex.add(1),
           prevCurrIndex
         );
         newCurIdx.assertEquals(afterCurrIndex);
 
         let idx1 = Circuit.if(
-          prevCurrIndex.lt(NftZkapp.SUPPLY),
+          prevCurrIndex.lt(NFT_SUPPLY),
           newCurIdx,
           DUMMY_NFT_ID
         );
@@ -127,13 +129,13 @@ let NftActionProverHelper = {
     let currentIndex = currState.currentIndex;
     let newCurrentIndex = currentIndex.toBigInt();
     let nftsCommitment = currState.nftsCommitment;
-    let supply = NftZkapp.SUPPLY.toBigInt();
+    let supply = NFT_SUPPLY;
 
     let currentNftId = currAction.nft.id;
     if (currAction.isMint().toBoolean() && newCurrentIndex < supply) {
       // mint
       newCurrentIndex = newCurrentIndex + 1n;
-      currentNftId = Field(currentIndex);
+      currentNftId = Field(newCurrentIndex);
       let currentNftHash = currAction.nft.assignId(currentNftId).hash();
       nftsCommitment = merkleProof.computeRootByField(currentNftHash);
       deepSubTree.update(currentNftId, currentNftHash);

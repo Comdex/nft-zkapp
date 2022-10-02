@@ -30,17 +30,17 @@ async function test() {
   let result = NftZkapp.analyzeMethods();
   console.log('analyze result: ', result);
 
+  console.log('start compiling NftActionProver');
+  console.time('NftActionProver compile');
+  await NftActionProver.compile();
+  console.timeEnd('NftActionProver compile');
+
   if (doProofs) {
     console.log('start compiling NftZkapp');
     console.time('NftZkapp compile');
     await NftZkapp.compile();
     console.timeEnd('NftZkapp compile');
   }
-
-  console.log('start compiling NftActionProver');
-  console.time('NftActionProver compile');
-  await NftActionProver.compile();
-  console.timeEnd('NftActionProver compile');
 
   console.log('deploying');
   let tx = await Mina.transaction(feePayerKey, () => {

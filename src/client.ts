@@ -2,14 +2,15 @@ import {
   NumIndexDeepSparseMerkleSubTreeForField,
   SMT_EMPTY_VALUE,
 } from 'snarky-smt';
-import { Field } from 'snarkyjs';
+import { Circuit, Field } from 'snarkyjs';
 import {
-  ActionProof,
   NftActionProver,
   NftActionProverHelper,
+  ActionProof,
 } from './action_prover';
 import { TREE_HEIGHT } from './constant';
-import { getPendingActions, merkleTree } from './indexer';
+import { merkleTree } from './global';
+import { getPendingActions } from './indexer';
 import { Action } from './models/action';
 import { ProofWithValueHash } from './models/proofs';
 import { NftZkapp } from './nft_zkapp';
@@ -101,6 +102,8 @@ async function runRecuriseProve(zkapp: NftZkapp): Promise<ActionProof | null> {
   for (let i = 0; i < pendingActions.length; i++) {
     let currAction = pendingActions[i];
     let index = indexes[i];
+    console.log('index: ', index);
+
     let merkleProof = deepSubTree.prove(Field(index));
     let stateTransition = NftActionProverHelper.commitAction(
       currAction,
