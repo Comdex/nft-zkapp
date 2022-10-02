@@ -2,6 +2,7 @@ import { createEmptyValue } from 'snarky-smt';
 import {
   arrayProp,
   Bool,
+  Circuit,
   CircuitValue,
   Encoding,
   Field,
@@ -83,13 +84,14 @@ class NFT extends CircuitValue {
   static createNFT(str: string, owner: PublicKey): NFT {
     let fs = Encoding.Bijective.Fp.fromString(str);
     let nftData = new NFTData(fs);
-    let ownerSecret = new OwnerSecret(owner).encrypt();
+    let blinding = Field.random();
+    let ownerSecret = new OwnerSecret(owner, blinding).encrypt();
     return new NFT(DUMMY_NFT_ID, ownerSecret, nftData);
   }
 
-  changeOwner(newOwner: PublicKey): NFT {
-    this.ownerSecret = new OwnerSecret(newOwner).encrypt();
-    return this;
+  changeOwner(newOwner: PublicKey) {
+    let blinding: Field = Circuit.witness(Field, () => Field.random());
+    this.ownerSecret = new OwnerSecret(newOwner, blinding).encrypt();
   }
 
   assignId(id: Field): NFT {

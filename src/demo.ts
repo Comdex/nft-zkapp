@@ -1,17 +1,5 @@
-import {
-  createEmptyValue,
-  MemoryStore,
-  NumIndexSparseMerkleTree,
-} from 'snarky-smt';
-import {
-  Circuit,
-  Encoding,
-  Field,
-  isReady,
-  PrivateKey,
-  shutdown,
-} from 'snarkyjs';
-import { NFT, NFTData } from './models/nft';
+import { isReady, PrivateKey, shutdown } from 'snarkyjs';
+import { NFT } from './models/nft';
 
 await isReady;
 

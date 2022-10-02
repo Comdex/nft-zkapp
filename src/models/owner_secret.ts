@@ -20,7 +20,7 @@ class OwnerSecret extends CircuitValue {
   @prop owner: PublicKey;
   @prop blinding: Field; //random number
 
-  constructor(owner: PublicKey, blinding: Field = Field.random()) {
+  constructor(owner: PublicKey, blinding: Field) {
     super();
     this.owner = owner;
     this.blinding = blinding;
@@ -28,8 +28,11 @@ class OwnerSecret extends CircuitValue {
 
   encrypt(): OwnerSecretCipherText {
     let newFields = this.toFields().map((v) => v);
-    const cipherText = Encryption.encrypt(newFields, this.owner);
-
+    let newPublicKey = PublicKey.ofFields(this.owner.toFields());
+    const cipherText = Encryption.encrypt(newFields, newPublicKey);
+    Circuit.asProver(() => {
+      console.log('encrypt success');
+    });
     return new OwnerSecretCipherText(
       [cipherText.publicKey.x, cipherText.publicKey.y],
       cipherText.cipherText
