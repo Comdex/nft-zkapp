@@ -4,23 +4,11 @@ import {
   PrivateKey,
   Permissions,
   shutdown,
-  SelfProof,
 } from 'snarkyjs';
-import { NftActionProver, NftActionProverHelper } from './action_prover';
-import {
-  constructDeepSubTree,
-  getIndexes,
-  getProofValuesByIndexes,
-  runRecuriseProve,
-} from './client';
-import {
-  getNFTFromIndexer,
-  getPendingActions,
-  indexerUpdate,
-  runIndexer,
-} from './indexer';
+import { NftActionProver } from './action_prover';
+import { runRecuriseProve } from './client';
+import { getNFTFromIndexer, runIndexer } from './indexer';
 import { NFT } from './models/nft';
-import { RollupStateTransition } from './models/rollup_state_transition';
 import { NftZkapp } from './nft_zkapp';
 
 const doProofs = true;
