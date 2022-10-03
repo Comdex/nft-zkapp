@@ -5,18 +5,20 @@ import {
   Permissions,
   shutdown,
 } from 'snarkyjs';
-import { NftActionProver } from './action_prover';
-import { runRecuriseProve } from './client';
+import { runRecursiveProve } from './client';
 import { getNFTFromIndexer, runIndexer } from './indexer';
 import { NFT } from './models/nft';
 import { NftZkapp } from './nft_zkapp';
+import { NftRollupProver } from './rollup_prover';
 
 const doProofs = true;
 let Local = Mina.LocalBlockchain();
 Mina.setActiveInstance(Local);
 
 let feePayerKey = Local.testAccounts[0].privateKey;
-let callerKey = Local.testAccounts[1].privateKey;
+let callerKey = PrivateKey.fromBase58(
+  'EKE51yW4HbYD9Xf1mLAechtFLHM8vRWGqJuowJXDGBy8VbMvTeiZ'
+); //Local.testAccounts[1].privateKey;
 let callerPublicKey = callerKey.toPublicKey();
 let receiverKey = Local.testAccounts[2].privateKey;
 let receiverPublicKey = receiverKey.toPublicKey();
@@ -30,10 +32,10 @@ async function test() {
   let result = NftZkapp.analyzeMethods();
   console.log('analyze result: ', result);
 
-  console.log('start compiling NftActionProver');
-  console.time('NftActionProver compile');
-  await NftActionProver.compile();
-  console.timeEnd('NftActionProver compile');
+  console.log('start compiling NftRollupProver');
+  console.time('NftRollupProver compile');
+  await NftRollupProver.compile();
+  console.timeEnd('NftRollupProver compile');
 
   if (doProofs) {
     console.log('start compiling NftZkapp');
@@ -84,7 +86,9 @@ async function test() {
 
   // first rollup
   // 1. execute the contract rollup method
-  let mergedProof = await runRecuriseProve(zkapp);
+  let mergedProof = await runRecursiveProve(zkapp);
+
+  console.log('zkapp rollup tx 1 start');
 
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.rollup(mergedProof!);
@@ -93,7 +97,7 @@ async function test() {
   if (doProofs) await tx.prove();
   tx.send();
 
-  console.log('zkapp rollup end');
+  console.log('zkapp rollup tx 1 end');
 
   let rollupCompletedRoot1 = zkapp.state.get().nftsCommitment;
   console.log('rollupCompletedRoot1: ', rollupCompletedRoot1.toString());
@@ -123,6 +127,7 @@ async function test() {
   });
   if (doProofs) await tx.prove();
   tx.send();
+
   console.log('nft1 transfer tx success');
 
   let nft2 = await getNFTFromIndexer(2n);
@@ -133,19 +138,24 @@ async function test() {
   });
   if (doProofs) await tx.prove();
   tx.send();
+
   console.log('nft2 transfer tx success');
 
   // second rollup
   // 1. execute the contract rollup method
-  mergedProof = await runRecuriseProve(zkapp);
+  mergedProof = await runRecursiveProve(zkapp);
+
+  console.log('zkapp rollup tx 2 start');
 
   tx = await Mina.transaction(feePayerKey, () => {
-    //zkapp.setProofStore(proofStore2);
     zkapp.rollup(mergedProof!);
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
+
+  console.log('zkapp rollup tx 2 end');
+
   let rollupCompletedRoot2 = zkapp.state.get().nftsCommitment;
   console.log('rollupCompletedRoot2: ', rollupCompletedRoot2.toString());
 

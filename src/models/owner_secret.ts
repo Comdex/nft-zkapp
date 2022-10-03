@@ -1,7 +1,6 @@
 import {
   arrayProp,
   Bool,
-  Circuit,
   CircuitValue,
   Encryption,
   Field,
@@ -30,9 +29,7 @@ class OwnerSecret extends CircuitValue {
     let newFields = this.toFields().map((v) => v);
     let newPublicKey = PublicKey.ofFields(this.owner.toFields());
     const cipherText = Encryption.encrypt(newFields, newPublicKey);
-    Circuit.asProver(() => {
-      console.log('encrypt success');
-    });
+
     return new OwnerSecretCipherText(
       [cipherText.publicKey.x, cipherText.publicKey.y],
       cipherText.cipherText
@@ -75,9 +72,6 @@ class OwnerSecretCipherText extends CircuitValue {
       ownerPrivateKey
     );
 
-    Circuit.asProver(() => {
-      console.log('decrypt success');
-    });
     return OwnerSecret.ofFields(decryptedFields);
   }
 

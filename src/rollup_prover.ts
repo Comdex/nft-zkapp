@@ -10,11 +10,11 @@ import { MerkleProof } from './models/proofs';
 import { RollupState } from './models/rollup_state';
 import { RollupStateTransition } from './models/rollup_state_transition';
 
-export { NftActionProver, ActionProof, NftActionProverHelper };
+export { NftRollupProver, NftRollupProof, NftRollupProverHelper };
 
 await isReady;
 
-let NftActionProver = Experimental.ZkProgram({
+let NftRollupProver = Experimental.ZkProgram({
   publicInput: RollupStateTransition,
 
   methods: {
@@ -41,10 +41,8 @@ let NftActionProver = Experimental.ZkProgram({
         let prevStateRoot = stateTransition.source.nftsCommitment;
         let prevCurrIndex = stateTransition.source.currentIndex;
         let afterStateRoot = stateTransition.target.nftsCommitment;
-        let afterLastIndex = stateTransition.target.lastIndex;
         let afterCurrIndex = stateTransition.target.currentIndex;
 
-        afterLastIndex.assertEquals(prevCurrIndex);
         merkleProof.root.assertEquals(prevStateRoot);
 
         let newCurIdx = Circuit.if(
@@ -112,9 +110,9 @@ let NftActionProver = Experimental.ZkProgram({
   },
 });
 
-class ActionProof extends Experimental.ZkProgram.Proof(NftActionProver) {}
+class NftRollupProof extends Experimental.ZkProgram.Proof(NftRollupProver) {}
 
-let NftActionProverHelper = {
+let NftRollupProverHelper = {
   init(state: RollupState): RollupStateTransition {
     return new RollupStateTransition(state, state);
   },
@@ -157,7 +155,6 @@ let NftActionProverHelper = {
       source: currState,
       target: RollupState.from({
         nftsCommitment,
-        lastINdex: currentIndex,
         currentIndex: Field(newCurrentIndex),
       }),
     });

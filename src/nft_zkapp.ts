@@ -15,18 +15,19 @@ import {
 import { Action } from './models/action';
 import { NFT } from './models/nft';
 import { RollupState } from './models/rollup_state';
-import { ActionProof } from './action_prover';
 import { merkleTree } from './global';
 import { NFT_SUPPLY } from './constant';
+import { NftRollupProof } from './rollup_prover';
 
-export { NftZkapp };
+export { NftZkapp, NFT_INIT_INDEX, NFT_INIT_ACTIONSHASH };
 
-const initCommitment = merkleTree.getRoot();
-const initIndex = Field.zero;
-const nftName = 'MinaGenesis';
-const nftSymbol = 'MG';
+const NFT_INIT_COMMITMENT = merkleTree.getRoot();
+const NFT_INIT_INDEX = Field.zero;
+const NFT_INIT_ACTIONSHASH = Experimental.Reducer.initialActionsHash;
+const NFT_NAME = 'MinaGenesis';
+const NFT_SYMBOL = 'MG';
 
-console.log('initCommitment: ', initCommitment.toString());
+console.log('nft initCommitment: ', NFT_INIT_COMMITMENT.toString());
 
 class NftZkapp extends SmartContract {
   // constant supply
@@ -35,24 +36,22 @@ class NftZkapp extends SmartContract {
   reducer = Experimental.Reducer({ actionType: Action });
 
   @state(RollupState) state = State<RollupState>();
-  @state(Field) lastActionsHash = State<Field>();
   @state(Field) currentActionsHash = State<Field>();
 
   indexerUrl: string;
 
   deploy(args: DeployArgs) {
     super.deploy(args);
-    this.state.set(new RollupState(initCommitment, initIndex, initIndex));
-    this.lastActionsHash.set(Experimental.Reducer.initialActionsHash);
-    this.currentActionsHash.set(Experimental.Reducer.initialActionsHash);
+    this.state.set(new RollupState(NFT_INIT_COMMITMENT, NFT_INIT_INDEX));
+    this.currentActionsHash.set(NFT_INIT_ACTIONSHASH);
   }
 
   name(): CircuitString {
-    return CircuitString.fromString(nftName);
+    return CircuitString.fromString(NFT_NAME);
   }
 
   symbol(): CircuitString {
-    return CircuitString.fromString(nftSymbol);
+    return CircuitString.fromString(NFT_SYMBOL);
   }
 
   // TODO
@@ -105,13 +104,13 @@ class NftZkapp extends SmartContract {
     const originalNFTHash = nft.hash();
 
     //TODO: a bug to fix
-    nft.changeOwner(receiver);
+    //nft.changeOwner(receiver);
 
     this.reducer.dispatch(Action.transfer(nft, originalNFTHash));
   }
 
   @method
-  rollup(proof: ActionProof) {
+  rollup(proof: NftRollupProof) {
     proof.verify();
 
     let state = this.state.get();
@@ -120,13 +119,8 @@ class NftZkapp extends SmartContract {
     proof.publicInput.source.assertEquals(state);
     this.state.set(proof.publicInput.target);
 
-    let lastActionsHash = this.lastActionsHash.get();
-    this.lastActionsHash.assertEquals(lastActionsHash);
-
     let currentActionsHash = this.currentActionsHash.get();
     this.currentActionsHash.assertEquals(currentActionsHash);
-
-    this.lastActionsHash.set(currentActionsHash);
 
     Circuit.asProver(() => {
       console.log('zkapp status assert success');

@@ -5,9 +5,14 @@ import { merkleTree } from './global';
 import { Action } from './models/action';
 import { NFT } from './models/nft';
 import { MerkleProof } from './models/proofs';
-import { NftZkapp } from './nft_zkapp';
+import { NftZkapp, NFT_INIT_ACTIONSHASH, NFT_INIT_INDEX } from './nft_zkapp';
 
 export { getPendingActions, getNFTFromIndexer, runIndexer };
+
+let indexerState = {
+  lastProcessedIndex: NFT_INIT_INDEX.toBigInt(),
+  lastProcessedActionsHash: NFT_INIT_ACTIONSHASH,
+};
 
 async function getNFTFromIndexer(id: bigint): Promise<NFT> {
   let nft = await merkleTree.get(id);
@@ -15,18 +20,22 @@ async function getNFTFromIndexer(id: bigint): Promise<NFT> {
 }
 
 async function runIndexer(zkapp: NftZkapp): Promise<Field> {
+  console.log('run indexer start');
+  console.time('run indexer');
+
   let supply = Field(NFT_SUPPLY);
   let currentState = zkapp.state.get();
-  let fromActionHash = zkapp.lastActionsHash.get();
   let endActionHash = zkapp.currentActionsHash.get();
-  let lastIndex = currentState.lastIndex;
   let currentIndex = currentState.currentIndex;
   let nftsCommitment = currentState.nftsCommitment;
+
+  let fromActionHash = indexerState.lastProcessedActionsHash;
+  let lastIndex = indexerState.lastProcessedIndex;
   console.log(
     `indexer-current state - fromActionHash: ${fromActionHash}, endActionHash: ${endActionHash}, lastIndex: ${lastIndex}, currentIndex: ${currentIndex}, nftsCommitment: ${nftsCommitment}`
   );
 
-  return indexerUpdate(
+  let newIndexerRoot = indexerUpdate(
     zkapp,
     fromActionHash,
     endActionHash,
@@ -34,13 +43,17 @@ async function runIndexer(zkapp: NftZkapp): Promise<Field> {
     currentIndex,
     supply
   );
+
+  console.timeEnd('run indexer');
+  console.log('run indexer end');
+  return newIndexerRoot;
 }
 
 async function indexerUpdate(
   zkapp: NftZkapp,
   fromActionHash: Field,
   endActionHash: Field,
-  lastIndex: Field,
+  lastIndex: bigint,
   currentIndex: Field,
   supply: Field
 ): Promise<Field> {
@@ -52,6 +65,9 @@ async function indexerUpdate(
     currentIndex,
     supply
   );
+
+  indexerState.lastProcessedIndex = currentIndex.toBigInt();
+  indexerState.lastProcessedActionsHash = endActionHash;
   return root;
 }
 
@@ -77,23 +93,25 @@ function getPendingActions(
 async function updateIndexerMerkleTree(
   tree: NumIndexSparseMerkleTree<NFT>,
   pendingActions: Action[],
-  lastIndex: Field,
+  lastIndex: bigint,
   currentIndex: Field,
   supply: Field
 ): Promise<Field> {
   let root = tree.getRoot();
   let lastNftsCommitment = root;
-  console.log('currentRoot: ', root.toString());
-  let curPos = lastIndex.toBigInt();
+  console.log('indexer-currentRoot: ', root.toString());
+  let curPos = lastIndex;
   let curIdx = currentIndex.toBigInt();
   let curSupply = supply.toBigInt();
 
-  let proofs: Map<bigint, MerkleProof> = new Map();
+  let originProofs: Map<bigint, MerkleProof> = new Map();
   for (let i = 0; i < pendingActions.length; i++) {
     let action = pendingActions[i];
-    let id = action.nft.id.toBigInt();
-    let proof = await tree.prove(id);
-    proofs.set(id, proof);
+    if (!action.isMint().toBoolean()) {
+      let id = action.nft.id.toBigInt();
+      let proof = await tree.prove(id);
+      originProofs.set(id, proof);
+    }
   }
 
   for (let i = 0; i < pendingActions.length; i++) {
@@ -106,7 +124,7 @@ async function updateIndexerMerkleTree(
       root = await tree.update(curPos, action.nft.assignId(Field(curPos)));
     } else {
       // transfer action
-      let proof = proofs.get(currentId.toBigInt())!;
+      let proof = originProofs.get(currentId.toBigInt())!;
       console.log('indexer-transfer nft id: ', currentId.toString());
       let isMember = proof.verifyByField(
         lastNftsCommitment,
