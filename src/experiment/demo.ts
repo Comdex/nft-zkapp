@@ -1,5 +1,5 @@
 import { isReady, PrivateKey, shutdown } from 'snarkyjs';
-import { NFT } from './models/nft';
+import { NFT } from '../models/nft';
 
 await isReady;
 
