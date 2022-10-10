@@ -43,6 +43,14 @@ class Action extends CircuitValue {
     };
   }
 
+  toString(): string {
+    return JSON.stringify(this.toPretty());
+  }
+
+  static empty(): Action {
+    return createEmptyValue(Action);
+  }
+
   static mint(nft: NFT): Action {
     return new Action(ACTION_TYPE_MINT, DUMMY_ORIGINALNFTHASH, nft);
   }

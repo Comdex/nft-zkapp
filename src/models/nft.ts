@@ -95,8 +95,9 @@ class NFT extends CircuitValue {
   }
 
   assignId(id: Field): NFT {
-    this.id = id;
-    return this;
+    let newNFT = this.clone();
+    newNFT.id = id;
+    return newNFT;
   }
 
   isAssignedId(): Bool {

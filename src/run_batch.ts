@@ -5,11 +5,11 @@ import {
   Permissions,
   shutdown,
 } from 'snarkyjs';
-import { runRollupProve } from './client';
+import { runRollupBatchProve } from './client';
 import { getNFTFromIndexer, runIndexer } from './indexer';
 import { NFT } from './models/nft';
-import { NftZkapp } from './nft_zkapp';
-import { NftRollupProver } from './rollup_prover';
+import { NftZkappBatch } from './nft_zkapp_batch';
+import { NftRollupBatchProver } from './rollup_batch_prover';
 
 const doProofs = true;
 const mintTxns = 5;
@@ -29,22 +29,22 @@ let zkappKey = PrivateKey.random();
 let zkappAddress = zkappKey.toPublicKey();
 
 async function test() {
-  let zkapp = new NftZkapp(zkappAddress);
+  let zkapp = new NftZkappBatch(zkappAddress);
 
   //analyze methods
-  let result = NftZkapp.analyzeMethods();
+  let result = NftZkappBatch.analyzeMethods();
   console.log('analyze result: ', result);
 
-  console.log('start compiling NftRollupProver');
-  console.time('NftRollupProver compile');
-  await NftRollupProver.compile();
-  console.timeEnd('NftRollupProver compile');
+  console.log('start compiling NftRollupBatchProver');
+  console.time('NftRollupBatchProver compile');
+  await NftRollupBatchProver.compile();
+  console.timeEnd('NftRollupBatchProver compile');
 
   if (doProofs) {
-    console.log('start compiling NftZkapp');
-    console.time('NftZkapp compile');
-    await NftZkapp.compile();
-    console.timeEnd('NftZkapp compile');
+    console.log('start compiling NftZkappBatch');
+    console.time('NftZkappBatch compile');
+    await NftZkappBatch.compile();
+    console.timeEnd('NftZkappBatch compile');
   }
 
   console.log('deploying');
@@ -81,7 +81,7 @@ async function test() {
 
   // first rollup
   // 1. execute the contract rollup method
-  let mergedProof = await runRollupProve(zkapp);
+  let mergedProof = await runRollupBatchProve(zkapp);
 
   console.log('zkapp rollup tx 1 start');
 
@@ -129,7 +129,7 @@ async function test() {
 
   // second rollup
   // 1. execute the contract rollup method
-  mergedProof = await runRollupProve(zkapp);
+  mergedProof = await runRollupBatchProve(zkapp);
 
   console.log('zkapp rollup tx 2 start');
 

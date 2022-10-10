@@ -16,9 +16,9 @@ import { NFT } from './models/nft';
 import { RollupState } from './models/rollup_state';
 import { merkleTree } from './global';
 import { NFT_SUPPLY } from './constant';
-import { NftRollupProof } from './rollup_prover';
+import { NftRollupBatchProof } from './rollup_batch_prover';
 
-export { NftZkapp, NFT_INIT_INDEX, NFT_INIT_ACTIONSHASH };
+export { NftZkappBatch, NFT_INIT_INDEX, NFT_INIT_ACTIONSHASH };
 
 const NFT_INIT_COMMITMENT = merkleTree.getRoot();
 const NFT_INIT_INDEX = Field.zero;
@@ -28,7 +28,7 @@ const NFT_SYMBOL = 'MG';
 
 console.log('nft initCommitment: ', NFT_INIT_COMMITMENT.toString());
 
-class NftZkapp extends SmartContract {
+class NftZkappBatch extends SmartContract {
   // constant supply
   SUPPLY = Field.fromNumber(NFT_SUPPLY);
 
@@ -97,7 +97,7 @@ class NftZkapp extends SmartContract {
   }
 
   @method
-  rollup(proof: NftRollupProof) {
+  rollup(proof: NftRollupBatchProof) {
     proof.verify();
 
     let state = this.state.get();

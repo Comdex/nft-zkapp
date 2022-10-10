@@ -1,8 +1,12 @@
+import { NumIndexDeepSparseMerkleSubTree, SMT_EMPTY_VALUE } from 'snarky-smt';
 import {
-  NumIndexDeepSparseMerkleSubTreeForField,
-  SMT_EMPTY_VALUE,
-} from 'snarky-smt';
-import { Circuit, Experimental, Field, isReady, SelfProof } from 'snarkyjs';
+  Circuit,
+  Experimental,
+  Field,
+  isReady,
+  SelfProof,
+  SequenceEvents,
+} from 'snarkyjs';
 import { NFT_SUPPLY } from './constant';
 import { Action } from './models/action';
 import { DUMMY_NFT_ID } from './models/nft';
@@ -18,43 +22,42 @@ let NftRollupProver = Experimental.ZkProgram({
   publicInput: RollupStateTransition,
 
   methods: {
-    init: {
-      privateInputs: [],
-
-      method(stateTransition: RollupStateTransition) {
-        stateTransition.target.assertEquals(stateTransition.source);
-      },
-    },
-
     commitAction: {
-      privateInputs: [Action, MerkleProof, SelfProof],
+      privateInputs: [Action, MerkleProof],
 
       method(
         stateTransition: RollupStateTransition,
         currAction: Action,
-        merkleProof: MerkleProof,
-        selfProof: SelfProof<RollupStateTransition>
+        merkleProof: MerkleProof
       ) {
-        selfProof.verify();
-        selfProof.publicInput.target.assertEquals(stateTransition.source);
-
         let prevStateRoot = stateTransition.source.nftsCommitment;
         let prevCurrIndex = stateTransition.source.currentIndex;
+        let prevCurrActionsHash = stateTransition.source.currentActionsHash;
         let afterStateRoot = stateTransition.target.nftsCommitment;
         let afterCurrIndex = stateTransition.target.currentIndex;
+        let afterCurrActonsHash = stateTransition.target.currentActionsHash;
 
-        merkleProof.root.assertEquals(prevStateRoot);
+        // validate actions hash
+        let eventHash = SequenceEvents.hash([currAction.toFields()]);
+        let newCurrActionsHash = SequenceEvents.updateSequenceState(
+          prevCurrActionsHash,
+          eventHash
+        );
+        newCurrActionsHash.assertEquals(afterCurrActonsHash);
 
-        let newCurIdx = Circuit.if(
+        // validate current index
+        let newCurrIdx = Circuit.if(
           currAction.isMint().and(prevCurrIndex.lt(NFT_SUPPLY)),
           prevCurrIndex.add(1),
           prevCurrIndex
         );
-        newCurIdx.assertEquals(afterCurrIndex);
+        newCurrIdx.assertEquals(afterCurrIndex);
 
+        // validate nfts commitment
+        merkleProof.root.assertEquals(prevStateRoot);
         let idx1 = Circuit.if(
           prevCurrIndex.lt(NFT_SUPPLY),
-          newCurIdx,
+          newCurrIdx,
           DUMMY_NFT_ID
         );
         let finalIdx = Circuit.if(
@@ -113,21 +116,24 @@ let NftRollupProver = Experimental.ZkProgram({
 class NftRollupProof extends Experimental.ZkProgram.Proof(NftRollupProver) {}
 
 let NftRollupProverHelper = {
-  init(state: RollupState): RollupStateTransition {
-    return new RollupStateTransition(state, state);
-  },
-
   commitAction(
     currAction: Action,
     merkleProof: MerkleProof,
-    previousProof: SelfProof<RollupStateTransition>,
-    deepSubTree: NumIndexDeepSparseMerkleSubTreeForField
+    currState: RollupState,
+    deepSubTree: NumIndexDeepSparseMerkleSubTree
   ): RollupStateTransition {
-    let currState = previousProof.publicInput.target;
     let currentIndex = currState.currentIndex;
     let newCurrentIndex = currentIndex.toBigInt();
     let nftsCommitment = currState.nftsCommitment;
+    let currentActionsHash = currState.currentActionsHash;
     let supply = NFT_SUPPLY;
+
+    // compute new actions hash
+    let eventHash = SequenceEvents.hash([currAction.toFields()]);
+    let newCurrentActionsHash = SequenceEvents.updateSequenceState(
+      currentActionsHash,
+      eventHash
+    );
 
     let currentNftId = currAction.nft.id;
     if (currAction.isMint().toBoolean() && newCurrentIndex < supply) {
@@ -156,6 +162,7 @@ let NftRollupProverHelper = {
       target: RollupState.from({
         nftsCommitment,
         currentIndex: Field(newCurrentIndex),
+        currentActionsHash: newCurrentActionsHash,
       }),
     });
   },

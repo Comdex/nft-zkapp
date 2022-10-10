@@ -1,6 +1,6 @@
 import { NumIndexSparseMerkleTree } from 'snarky-smt';
 import { Field } from 'snarkyjs';
-import { NFT_SUPPLY } from './constant';
+import { MAX_ACTIONS_NUM, NFT_SUPPLY } from './constant';
 import { merkleTree } from './global';
 import { Action } from './models/action';
 import { NFT } from './models/nft';
@@ -25,7 +25,7 @@ async function runIndexer(zkapp: NftZkapp): Promise<Field> {
 
   let supply = Field(NFT_SUPPLY);
   let currentState = zkapp.state.get();
-  let endActionHash = zkapp.currentActionsHash.get();
+  let endActionHash = currentState.currentActionsHash;
   let currentIndex = currentState.currentIndex;
   let nftsCommitment = currentState.nftsCommitment;
 
@@ -81,11 +81,20 @@ function getPendingActions(
     endActionHash,
   });
   let actions: Action[] = [];
-  pendingActions.forEach((arr: Action[]) => {
-    arr.forEach((v: Action) => {
-      actions.push(v);
-    });
-  });
+  let currActionsNum = 0;
+
+  for (let i = 0, len = pendingActions.length; i < len; i++) {
+    let actionList = pendingActions[i];
+    for (let j = 0, acLen = actionList.length; j < acLen; j++) {
+      let action = actionList[j];
+      if (currActionsNum < MAX_ACTIONS_NUM) {
+        actions.push(action);
+        currActionsNum++;
+      } else {
+        break;
+      }
+    }
+  }
 
   return actions;
 }
@@ -105,7 +114,7 @@ async function updateIndexerMerkleTree(
   let curSupply = supply.toBigInt();
 
   let originProofs: Map<bigint, MerkleProof> = new Map();
-  for (let i = 0; i < pendingActions.length; i++) {
+  for (let i = 0, len = pendingActions.length; i < len; i++) {
     let action = pendingActions[i];
     if (!action.isMint().toBoolean()) {
       let id = action.nft.id.toBigInt();
@@ -114,7 +123,7 @@ async function updateIndexerMerkleTree(
     }
   }
 
-  for (let i = 0; i < pendingActions.length; i++) {
+  for (let i = 0, len = pendingActions.length; i < len; i++) {
     let action = pendingActions[i];
 
     let currentId = action.nft.id;

@@ -16,6 +16,7 @@
   "scripts": {
     "genkey": "tsc -p tsconfig.json && node --experimental-specifier-resolution=node ./build/src/experiment/genkey.js",
     "clear": "rm -rf ./build",
+    "batch": "tsc -p tsconfig.json && node --experimental-specifier-resolution=node ./build/src/run_batch.js",
     "nft": "tsc -p tsconfig.json && node --experimental-specifier-resolution=node ./build/src/run.js",
     "demo": "tsc -p tsconfig.json && node --experimental-specifier-resolution=node ./build/src/experiment/demo.js",
     "build": "tsc -p tsconfig.json",
@@ -51,6 +52,6 @@
     "snarkyjs": "^0.6.0"
   },
   "dependencies": {
-    "snarky-smt": "^0.3.9"
+    "snarky-smt": "^0.4.0"
   }
 }

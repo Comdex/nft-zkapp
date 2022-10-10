@@ -9,7 +9,7 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - name: Set up NodeJS
         uses: actions/setup-node@v2
@@ -17,10 +17,10 @@ jobs:
           node-version: '16'
       - name: Git checkout
         uses: actions/checkout@v2
-      - name: NPM ci, build, & test
+      - name: NPM install, build, & test
         run: |
           npm install
           npm run build --if-present
-          npm run nft
+          npm run nft --if-present
         env:
           CI: true

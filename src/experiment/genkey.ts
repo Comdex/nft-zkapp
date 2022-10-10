@@ -1,5 +1,4 @@
 import { isReady, PrivateKey } from 'snarkyjs';
-
 await isReady;
 
 let priKey = PrivateKey.random();
