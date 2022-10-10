@@ -1,6 +1,8 @@
 # nft-zkapp: a simple private NFT based on mina zkApp
 
-This is a simple NFT project that tries to use snarkyjs's actions/reducer feature and merkle tree. It also uses mina's zk proof to protect the nft's owner address from being public. This project allows you to enter arbitrary short strings to mint nfts, protect your privacy by encrypting your address, and use zero-knowledge proofs to prove your ownership, please note that this is just a proof of concept project as actions/reducer is still an experimental feature and not available on qanet(This project mocks the simple functionality of a nft data indexer locally for testing).
+Update: The reducer feature is no longer used, and zkProgram was used to develop rollup merged proof to prove the legality of state transitions.
+
+This is a simple NFT project that tries to use snarkyjs's ~~actions/reducer feature~~ and merkle tree. It also uses mina's zk proof to protect the nft's owner address from being public. This project allows you to enter arbitrary short strings to mint nfts, protect your privacy by encrypting your address, and use zero-knowledge proofs to prove your ownership, please note that this is just a proof of concept project as ~~actions/reducer~~(zkProgram) is still an experimental feature and not available on qanet(This project mocks the simple functionality of a nft data indexer locally for testing).
 
 ## Off-chain NFT solution
 
