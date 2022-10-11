@@ -4,16 +4,18 @@ import {
   PrivateKey,
   Permissions,
   shutdown,
+  Field,
 } from 'snarkyjs';
-import { runRollupProve } from './client';
+import { runRollupBatchProve } from './client';
+import { ACTION_BATCH_SIZE } from './constant';
 import { getNFTFromIndexer, runIndexer } from './indexer';
-import { NFT } from './models/nft';
+import { NFT, NFTData } from './models/nft';
 import { NftZkapp } from './nft_zkapp';
 import { NftRollupProver } from './rollup_prover';
 
 const doProofs = true;
-const mintTxns = 5;
-const transferTxns = 5;
+const mintTxns = ACTION_BATCH_SIZE;
+const transferTxns = ACTION_BATCH_SIZE;
 
 let Local = Mina.LocalBlockchain();
 Mina.setActiveInstance(Local);
@@ -33,7 +35,7 @@ async function test() {
 
   //analyze methods
   let result = NftZkapp.analyzeMethods();
-  console.log('analyze result: ', result);
+  console.log('NftZkapp analyze result: ', result);
 
   console.log('start compiling NftRollupProver');
   console.time('NftRollupProver compile');
@@ -81,7 +83,7 @@ async function test() {
 
   // first rollup
   // 1. execute the contract rollup method
-  let mergedProof = await runRollupProve(zkapp);
+  let mergedProof = await runRollupBatchProve(zkapp);
 
   console.log('zkapp rollup tx 1 start');
 
@@ -127,9 +129,21 @@ async function test() {
     console.log('nft transfer tx success, id: ', i);
   }
 
+  // fake nft test
+  let nft = await getNFTFromIndexer(BigInt(1));
+  nft.data = new NFTData([Field.zero, Field.one]);
+  console.log('fake nft id: ', nft.toPretty());
+  tx = await Mina.transaction(feePayerKey, () => {
+    zkapp.transfer(receiverPublicKey, nft, callerKey);
+    if (!doProofs) zkapp.sign(zkappKey);
+  });
+  if (doProofs) await tx.prove();
+  tx.send();
+  console.log('fake nft transfer tx success, nft: ', nft.toPretty());
+
   // second rollup
   // 1. execute the contract rollup method
-  mergedProof = await runRollupProve(zkapp);
+  mergedProof = await runRollupBatchProve(zkapp);
 
   console.log('zkapp rollup tx 2 start');
 

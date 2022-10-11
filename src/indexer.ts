@@ -4,7 +4,6 @@ import { MAX_ACTIONS_NUM, NFT_SUPPLY } from './constant';
 import { merkleTree } from './global';
 import { Action } from './models/action';
 import { NFT } from './models/nft';
-import { MerkleProof } from './models/proofs';
 import { NftZkapp, NFT_INIT_ACTIONSHASH, NFT_INIT_INDEX } from './nft_zkapp';
 
 export { getPendingActions, getNFTFromIndexer, runIndexer };
@@ -107,21 +106,11 @@ async function updateIndexerMerkleTree(
   supply: Field
 ): Promise<Field> {
   let root = tree.getRoot();
-  let lastNftsCommitment = root;
   console.log('indexer-currentRoot: ', root.toString());
+
   let curPos = lastIndex;
   let curIdx = currentIndex.toBigInt();
   let curSupply = supply.toBigInt();
-
-  let originProofs: Map<bigint, MerkleProof> = new Map();
-  for (let i = 0, len = pendingActions.length; i < len; i++) {
-    let action = pendingActions[i];
-    if (!action.isMint().toBoolean()) {
-      let id = action.nft.id.toBigInt();
-      let proof = await tree.prove(id);
-      originProofs.set(id, proof);
-    }
-  }
 
   for (let i = 0, len = pendingActions.length; i < len; i++) {
     let action = pendingActions[i];
@@ -133,14 +122,19 @@ async function updateIndexerMerkleTree(
       root = await tree.update(curPos, action.nft.assignId(Field(curPos)));
     } else {
       // transfer action
-      let proof = originProofs.get(currentId.toBigInt())!;
       console.log('indexer-transfer nft id: ', currentId.toString());
-      let isMember = proof.verifyByField(
-        lastNftsCommitment,
-        action.originalNFTHash
-      );
-      if (isMember) {
-        console.log('nft isMember, id: ', currentId.toString());
+
+      let nftExist = true;
+      let nftValue = await tree.get(currentId.toBigInt());
+      if (
+        nftValue === null ||
+        !nftValue.hash().equals(action.originalNFTHash)
+      ) {
+        nftExist = false;
+      }
+
+      if (nftExist) {
+        console.log('nft exist, id: ', currentId.toString());
         root = await tree.update(currentId.toBigInt(), action.nft);
       }
     }

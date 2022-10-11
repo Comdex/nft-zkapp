@@ -12,10 +12,7 @@ import { Action } from './models/action';
 import { MerkleProof, ProofWithValueHash } from './models/proofs';
 import { NftZkapp } from './nft_zkapp';
 import { ActionBatch } from './models/action_batch';
-import {
-  NftRollupBatchProver,
-  NftRollupBatchProverHelper,
-} from './rollup_batch_prover';
+import { RollupState } from './models/rollup_state';
 
 export { runRollupProve, runRollupBatchProve };
 
@@ -39,10 +36,12 @@ function getIndexes(pendingActions: Action[], currentIndex: Field): bigint[] {
 
 async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
   proofValues: ProofWithValueHash[];
-  proofs: Map<bigint, MerkleProof>;
+  zeroProof: MerkleProof;
 }> {
   let proofValues: ProofWithValueHash[] = [];
-  let proofs = new Map<bigint, MerkleProof>();
+
+  let zeroProof = await merkleTree.prove(0n);
+  proofValues.push(new ProofWithValueHash(zeroProof, SMT_EMPTY_VALUE));
 
   for (let i = 0, len = indexes.length; i < len; i++) {
     let id = indexes[i];
@@ -53,10 +52,9 @@ async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
       valueHash = value.hash();
     }
     proofValues.push(new ProofWithValueHash(proof, valueHash));
-    proofs.set(id, proof);
   }
 
-  return { proofValues, proofs };
+  return { proofValues, zeroProof };
 }
 
 function constructDeepSubTree(
@@ -69,16 +67,23 @@ function constructDeepSubTree(
   );
   for (let i = 0, len = proofValues.length; i < len; i++) {
     let proofValueHash = proofValues[i];
-    deepSubTree.addBranch(proofValueHash.proof, proofValueHash.valueHash);
+    try {
+      deepSubTree.addBranch(proofValueHash.proof, proofValueHash.valueHash);
+    } catch (err: any) {
+      console.log(err);
+    }
   }
 
   return deepSubTree;
 }
 
-async function runRollupProve(zkapp: NftZkapp): Promise<NftRollupProof | null> {
-  console.log('run rollup prove start');
-  console.time('run rollup prove');
-
+async function prepareForRollup(zkapp: NftZkapp): Promise<{
+  pendingActions: Action[];
+  deepSubTree: NumIndexDeepSparseMerkleSubTree;
+  currentState: RollupState;
+  indexes: bigint[];
+  zeroProof: MerkleProof;
+}> {
   let currentState = zkapp.state.get();
   let endActionHash = currentState.currentActionsHash;
   let currentIndex = currentState.currentIndex;
@@ -90,20 +95,35 @@ async function runRollupProve(zkapp: NftZkapp): Promise<NftRollupProof | null> {
   let pendingActions = getPendingActions(zkapp, endActionHash);
   console.log('pendingActions: ', pendingActions.toString());
 
-  if (pendingActions.length === 0) {
-    return null;
-  }
-
   let indexes = getIndexes(pendingActions, currentIndex);
   console.log('indexes: ', indexes.toString());
 
   console.time('get proofValues');
-  let { proofValues } = await getProofValuesByIndexes(indexes);
+  let { proofValues, zeroProof } = await getProofValuesByIndexes(indexes);
   console.timeEnd('get proofValues');
 
   console.time('construct DeepSubTree');
   let deepSubTree = constructDeepSubTree(proofValues, nftsCommitment);
   console.timeEnd('construct DeepSubTree');
+
+  return {
+    pendingActions,
+    deepSubTree,
+    currentState,
+    indexes,
+    zeroProof,
+  };
+}
+
+async function runRollupProve(zkapp: NftZkapp): Promise<NftRollupProof | null> {
+  console.log('run rollup prove start');
+  console.time('run rollup prove');
+
+  let { pendingActions, deepSubTree, currentState, indexes } =
+    await prepareForRollup(zkapp);
+  if (pendingActions.length === 0) {
+    return null;
+  }
 
   let proofs: NftRollupProof[] = [];
   let currState = currentState;
@@ -112,10 +132,9 @@ async function runRollupProve(zkapp: NftZkapp): Promise<NftRollupProof | null> {
     let index = indexes[i];
     console.log('index: ', index);
 
-    let merkleProof = deepSubTree.prove(Field(index));
-    let stateTransition = NftRollupProverHelper.commitAction(
+    let { stateTransition, merkleProof } = NftRollupProverHelper.commitAction(
       currAction,
-      merkleProof,
+      index,
       currState,
       deepSubTree
     );
@@ -129,84 +148,47 @@ async function runRollupProve(zkapp: NftZkapp): Promise<NftRollupProof | null> {
     console.timeEnd('generate commitAction proof');
 
     proofs.push(currProof);
-
     currState = stateTransition.target;
   }
 
-  let finalProof = proofs[0];
-
-  if (proofs.length >= 2) {
-    console.log('start merge proof');
-    let p1 = proofs[0];
-    let p2 = proofs[1];
-    let stateTransition = NftRollupProverHelper.merge(p1, p2);
-    let mergeProof = await NftRollupProver.merge(stateTransition, p1, p2);
-
-    console.log('merge proof > 2');
-    for (let i = 2, len = proofs.length; i < len; i++) {
-      let currProof = proofs[i];
-      stateTransition = NftRollupProverHelper.merge(mergeProof, currProof);
-
-      console.time('generate merge proof');
-      let tempProof = await NftRollupProver.merge(
-        stateTransition,
-        mergeProof,
-        currProof
-      );
-      console.timeEnd('generate merge proof');
-      mergeProof = tempProof;
+  let mergedProof = proofs[0];
+  if (proofs.length > 1) {
+    for (let i = 1, len = proofs.length; i < len; i++) {
+      let p1 = mergedProof;
+      let p2 = proofs[i];
+      let stateTransition = NftRollupProverHelper.merge(p1, p2);
+      console.time('generate merged proof');
+      mergedProof = await NftRollupProver.merge(stateTransition, p1, p2);
+      console.timeEnd('generate merged proof');
     }
-
-    finalProof = mergeProof;
   }
 
   console.timeEnd('run rollup prove');
+
   console.log('run rollup prove end');
-  return finalProof;
+  return mergedProof;
 }
 
 async function runRollupBatchProve(
   zkapp: NftZkapp
 ): Promise<NftRollupProof | null> {
-  console.log('run rollup prove start');
-  console.time('run rollup prove');
+  console.log('run rollup batch prove start');
+  console.time('run rollup batch prove');
 
-  let currentState = zkapp.state.get();
-  let endActionHash = currentState.currentActionsHash;
-  let currentIndex = currentState.currentIndex;
-  let nftsCommitment = currentState.nftsCommitment;
-  console.log(
-    `client-current state - endActionHash: ${endActionHash}, currentIndex: ${currentIndex}, nftsCommitment: ${nftsCommitment}`
-  );
-
-  let pendingActions = getPendingActions(zkapp, endActionHash);
-  console.log('pendingActions: ', pendingActions.toString());
-
+  let { pendingActions, deepSubTree, currentState, zeroProof } =
+    await prepareForRollup(zkapp);
   if (pendingActions.length === 0) {
     return null;
   }
 
-  let indexes = getIndexes(pendingActions, currentIndex);
-  console.log('indexes: ', indexes.toString());
-
-  console.time('get proofValues');
-  let { proofValues, proofs: merkleProofs } = await getProofValuesByIndexes(
-    indexes
-  );
-  console.timeEnd('get proofValues');
-
-  console.time('construct DeepSubTree');
-  let deepSubTree = constructDeepSubTree(proofValues, nftsCommitment);
-  console.timeEnd('construct DeepSubTree');
-
   let proofs: NftRollupProof[] = [];
   let currState = currentState;
 
-  let batch = pendingActions.length / ActionBatch.batchSize;
+  let batchNum = pendingActions.length / ActionBatch.batchSize;
   let restActionsNum = pendingActions.length % ActionBatch.batchSize;
 
   let curPos = 0;
-  for (let i = 0; i < batch; i++) {
+  for (let i = 0; i < batchNum; i++) {
     let currentActions = pendingActions.slice(
       curPos,
       curPos + ActionBatch.batchSize
@@ -214,69 +196,57 @@ async function runRollupBatchProve(
     curPos = curPos + ActionBatch.batchSize;
 
     let { stateTransition, actionBatch } =
-      NftRollupBatchProverHelper.commitActions(
+      NftRollupProverHelper.commitActionBatch(
         currentActions,
         currState,
         deepSubTree,
-        merkleProofs
+        zeroProof
       );
 
-    console.time('generate commitActions proof');
-    let currProof = await NftRollupBatchProver.commitActions(
+    console.time('generate commitActionBatch proof');
+    let currProof = await NftRollupProver.commitActionBatch(
       stateTransition,
       actionBatch
     );
-    console.timeEnd('generate commitActions proof');
+    console.timeEnd('generate commitActionBatch proof');
 
     proofs.push(currProof);
-
     currState = stateTransition.target;
   }
 
   // process rest actions
-  let { stateTransition, actionBatch } =
-    NftRollupBatchProverHelper.commitActions(
-      pendingActions.slice(curPos, curPos + restActionsNum),
-      currState,
-      deepSubTree,
-      merkleProofs
-    );
-
-  console.time('generate commitActions proof');
-  let currProof = await NftRollupBatchProver.commitActions(
-    stateTransition,
-    actionBatch
-  );
-  console.timeEnd('generate commitActions proof');
-  proofs.push(currProof);
-
-  let finalProof = proofs[0];
-  if (proofs.length >= 2) {
-    console.log('start merge proof');
-    let p1 = proofs[0];
-    let p2 = proofs[1];
-    let stateTransition = NftRollupProverHelper.merge(p1, p2);
-    let mergeProof = await NftRollupProver.merge(stateTransition, p1, p2);
-
-    console.log('merge proof > 2');
-    for (let i = 2, len = proofs.length; i < len; i++) {
-      let currProof = proofs[i];
-      stateTransition = NftRollupProverHelper.merge(mergeProof, currProof);
-
-      console.time('generate merge proof');
-      let tempProof = await NftRollupProver.merge(
-        stateTransition,
-        mergeProof,
-        currProof
+  if (restActionsNum > 0) {
+    let { stateTransition, actionBatch } =
+      NftRollupProverHelper.commitActionBatch(
+        pendingActions.slice(curPos, curPos + restActionsNum),
+        currState,
+        deepSubTree,
+        zeroProof
       );
-      console.timeEnd('generate merge proof');
-      mergeProof = tempProof;
-    }
 
-    finalProof = mergeProof;
+    console.time('generate commitActionBatch proof');
+    let currProof = await NftRollupProver.commitActionBatch(
+      stateTransition,
+      actionBatch
+    );
+    console.timeEnd('generate commitActionBatch proof');
+    proofs.push(currProof);
   }
 
-  console.timeEnd('run rollup prove');
-  console.log('run rollup prove end');
-  return finalProof;
+  let mergedProof = proofs[0];
+  if (proofs.length > 1) {
+    for (let i = 1, len = proofs.length; i < len; i++) {
+      let p1 = mergedProof;
+      let p2 = proofs[i];
+      let stateTransition = NftRollupProverHelper.merge(p1, p2);
+      console.time('generate merged proof');
+      mergedProof = await NftRollupProver.merge(stateTransition, p1, p2);
+      console.timeEnd('generate merged proof');
+    }
+  }
+
+  console.timeEnd('run rollup batch prove');
+
+  console.log('run rollup batch prove end');
+  return mergedProof;
 }
