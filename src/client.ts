@@ -19,19 +19,19 @@ export { runRollupProve, runRollupBatchProve };
 function getIndexes(pendingActions: Action[], currentIndex: Field): bigint[] {
   let curIdx: bigint = currentIndex.toBigInt();
 
-  let indexes: bigint[] = [];
+  let indexes: Set<bigint> = new Set<bigint>();
 
   for (let i = 0, len = pendingActions.length; i < len; i++) {
     let action = pendingActions[i];
     if (action.isMint().toBoolean()) {
       curIdx = curIdx + 1n;
-      indexes.push(curIdx);
+      indexes.add(curIdx);
     } else {
-      indexes.push(action.nft.id.toBigInt());
+      indexes.add(action.nft.id.toBigInt());
     }
   }
 
-  return indexes;
+  return Array.from(indexes);
 }
 
 async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
@@ -48,6 +48,7 @@ async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
     let proof = await merkleTree.prove(id);
     let valueHash = SMT_EMPTY_VALUE;
     let value = await merkleTree.get(id);
+
     if (value !== null) {
       valueHash = value.hash();
     }
@@ -65,13 +66,10 @@ function constructDeepSubTree(
     nftsCommitment,
     TREE_HEIGHT
   );
+
   for (let i = 0, len = proofValues.length; i < len; i++) {
     let proofValueHash = proofValues[i];
-    try {
-      deepSubTree.addBranch(proofValueHash.proof, proofValueHash.valueHash);
-    } catch (err: any) {
-      console.log(err);
-    }
+    deepSubTree.addBranch(proofValueHash.proof, proofValueHash.valueHash, true);
   }
 
   return deepSubTree;
@@ -203,6 +201,8 @@ async function runRollupBatchProve(
         zeroProof
       );
 
+    console.log('stateTransition: ', stateTransition.toPretty());
+
     console.time('generate commitActionBatch proof');
     let currProof = await NftRollupProver.commitActionBatch(
       stateTransition,
@@ -216,6 +216,7 @@ async function runRollupBatchProve(
 
   // process rest actions
   if (restActionsNum > 0) {
+    console.log('process rest actions');
     let { stateTransition, actionBatch } =
       NftRollupProverHelper.commitActionBatch(
         pendingActions.slice(curPos, curPos + restActionsNum),
@@ -224,12 +225,15 @@ async function runRollupBatchProve(
         zeroProof
       );
 
+    console.log('stateTransition: ', stateTransition.toPretty());
+
     console.time('generate commitActionBatch proof');
     let currProof = await NftRollupProver.commitActionBatch(
       stateTransition,
       actionBatch
     );
     console.timeEnd('generate commitActionBatch proof');
+
     proofs.push(currProof);
   }
 

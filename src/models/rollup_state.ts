@@ -35,4 +35,12 @@ class RollupState extends CircuitValue {
   hash(): Field {
     return Poseidon.hash(this.toFields());
   }
+
+  toPretty(): any {
+    return {
+      nftsCommitment: this.nftsCommitment.toString(),
+      currentIndex: this.currentIndex.toString(),
+      currentActionsHash: this.currentActionsHash.toString(),
+    };
+  }
 }

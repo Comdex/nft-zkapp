@@ -51,6 +51,6 @@
     "snarkyjs": "^0.6.0"
   },
   "dependencies": {
-    "snarky-smt": "^0.4.1"
+    "snarky-smt": "^0.4.2"
   }
 }

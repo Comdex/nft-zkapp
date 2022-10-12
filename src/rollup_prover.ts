@@ -19,6 +19,83 @@ export { NftRollupProver, NftRollupProof, NftRollupProverHelper };
 
 await isReady;
 
+function rollupStateTransform(currStateData: {
+  currAction: Action;
+  currMerkleProof: MerkleProof;
+  currentActionsHash: Field;
+  currentIndex: Field;
+  currentNftsCommitment: Field;
+}): {
+  currentActionsHash: Field;
+  currentIndex: Field;
+  currentNftsCommitment: Field;
+} {
+  let {
+    currAction,
+    currMerkleProof,
+    currentActionsHash,
+    currentIndex,
+    currentNftsCommitment,
+  } = currStateData;
+  // compute actions hash
+  let eventHash = SequenceEvents.hash([currAction.toFields()]);
+  currentActionsHash = Circuit.if(
+    currAction.isDummyData(),
+    currentActionsHash,
+    SequenceEvents.updateSequenceState(currentActionsHash, eventHash)
+  );
+
+  // compute current index
+  currentIndex = Circuit.if(
+    currAction.isMint().and(currentIndex.lt(NFT_SUPPLY)),
+    currentIndex.add(1),
+    currentIndex
+  );
+
+  // compute nft id
+  let idxAfterCheckSupply = Circuit.if(
+    currentIndex.lt(NFT_SUPPLY),
+    currentIndex,
+    DUMMY_NFT_ID
+  );
+  let idxAfterCheckIsTransfer = Circuit.if(
+    currAction.isTransfer(),
+    currAction.nft.id,
+    idxAfterCheckSupply
+  );
+  let finalIdx = Circuit.if(
+    currAction.isDummyData(),
+    DUMMY_NFT_ID,
+    idxAfterCheckIsTransfer
+  );
+
+  let [updateNftId, updateNFTHash] = Circuit.if(
+    finalIdx.equals(DUMMY_NFT_ID),
+    [DUMMY_NFT_ID, SMT_EMPTY_VALUE],
+    Circuit.if(
+      currAction.isMint(),
+      [finalIdx, currAction.nft.assignId(finalIdx).hash()],
+      // Check whether the transfer is valid
+      Circuit.if(
+        currMerkleProof.verifyByFieldInCircuit(
+          currentNftsCommitment,
+          currAction.originalNFTHash
+        ),
+        [finalIdx, currAction.nft.hash()],
+        [DUMMY_NFT_ID, SMT_EMPTY_VALUE]
+      )
+    )
+  );
+
+  currentNftsCommitment = Circuit.if(
+    updateNftId.equals(DUMMY_NFT_ID).and(updateNFTHash.equals(SMT_EMPTY_VALUE)),
+    currentNftsCommitment,
+    currMerkleProof.computeRootByFieldInCircuit(updateNFTHash)
+  );
+
+  return { currentActionsHash, currentIndex, currentNftsCommitment };
+}
+
 let NftRollupProver = Experimental.ZkProgram({
   publicInput: RollupStateTransition,
 
@@ -27,76 +104,52 @@ let NftRollupProver = Experimental.ZkProgram({
       privateInputs: [ActionBatch],
 
       method(stateTransition: RollupStateTransition, actionBatch: ActionBatch) {
-        let prevStateRoot = stateTransition.source.nftsCommitment;
+        let prevNftsCommitment = stateTransition.source.nftsCommitment;
         let prevCurrIndex = stateTransition.source.currentIndex;
         let prevCurrActionsHash = stateTransition.source.currentActionsHash;
-        let afterStateRoot = stateTransition.target.nftsCommitment;
+        let afterNfsCommitment = stateTransition.target.nftsCommitment;
         let afterCurrIndex = stateTransition.target.currentIndex;
         let afterCurrActonsHash = stateTransition.target.currentActionsHash;
 
         let currentActionsHash = prevCurrActionsHash;
         let currentIndex = prevCurrIndex;
-        let currentStateRoot = prevStateRoot;
+        let currentNftsCommitment = prevNftsCommitment;
 
         for (let i = 0, len = ActionBatch.batchSize; i < len; i++) {
           let currAction = actionBatch.actions[i];
           let currMerkleProof = actionBatch.merkleProofs[i];
 
-          // compute actions hash
-          let eventHash = SequenceEvents.hash([currAction.toFields()]);
-          currentActionsHash = Circuit.if(
-            currAction.isDummyData(),
+          let newState = rollupStateTransform({
+            currAction,
+            currMerkleProof,
             currentActionsHash,
-            SequenceEvents.updateSequenceState(currentActionsHash, eventHash)
-          );
-
-          // compute current index
-          currentIndex = Circuit.if(
-            currAction.isMint().and(currentIndex.lt(NFT_SUPPLY)),
-            currentIndex.add(1),
-            currentIndex
-          );
-
-          // compute nft id
-          let idx1 = Circuit.if(
-            currentIndex.lt(NFT_SUPPLY),
             currentIndex,
-            DUMMY_NFT_ID
-          );
-          let finalIdx = Circuit.if(
-            currAction.isTransfer(),
-            currAction.nft.id,
-            idx1
-          );
+            currentNftsCommitment,
+          });
 
-          let updateNFTHash = Circuit.if(
-            finalIdx.equals(DUMMY_NFT_ID),
-            SMT_EMPTY_VALUE,
-            Circuit.if(
-              currAction.isMint(),
-              currAction.nft.assignId(finalIdx).hash(),
-              // Check whether the transfer is valid
-              Circuit.if(
-                currMerkleProof.verifyByFieldInCircuit(
-                  currentStateRoot,
-                  currAction.originalNFTHash
-                ),
-                currAction.nft.hash(),
-                SMT_EMPTY_VALUE
-              )
-            )
-          );
-
-          currentStateRoot = Circuit.if(
-            finalIdx.equals(DUMMY_NFT_ID),
-            currentStateRoot,
-            currMerkleProof.computeRootByFieldInCircuit(updateNFTHash)
-          );
+          currentActionsHash = newState.currentActionsHash;
+          currentIndex = newState.currentIndex;
+          currentNftsCommitment = newState.currentNftsCommitment;
         }
 
         currentActionsHash.assertEquals(afterCurrActonsHash);
+        Circuit.asProver(() => {
+          console.log(
+            `currentActionsHash: ${currentActionsHash.toString()} assert success`
+          );
+        });
         currentIndex.assertEquals(afterCurrIndex);
-        currentStateRoot.assertEquals(afterStateRoot);
+        Circuit.asProver(() => {
+          console.log(
+            `currentIndex: ${currentIndex.toString()} assert success`
+          );
+        });
+        currentNftsCommitment.assertEquals(afterNfsCommitment);
+        Circuit.asProver(() => {
+          console.log(
+            `currentNftsCommitment: ${currentNftsCommitment.toString()} assert success`
+          );
+        });
       },
     },
 
@@ -106,69 +159,42 @@ let NftRollupProver = Experimental.ZkProgram({
       method(
         stateTransition: RollupStateTransition,
         currAction: Action,
-        merkleProof: MerkleProof
+        currMerkleProof: MerkleProof
       ) {
-        let prevStateRoot = stateTransition.source.nftsCommitment;
+        let prevNftsCommitment = stateTransition.source.nftsCommitment;
         let prevCurrIndex = stateTransition.source.currentIndex;
         let prevCurrActionsHash = stateTransition.source.currentActionsHash;
-        let afterStateRoot = stateTransition.target.nftsCommitment;
+        let afterNfsCommitment = stateTransition.target.nftsCommitment;
         let afterCurrIndex = stateTransition.target.currentIndex;
         let afterCurrActonsHash = stateTransition.target.currentActionsHash;
 
-        // validate actions hash
-        let eventHash = SequenceEvents.hash([currAction.toFields()]);
-        let newCurrActionsHash = SequenceEvents.updateSequenceState(
-          prevCurrActionsHash,
-          eventHash
-        );
-        newCurrActionsHash.assertEquals(afterCurrActonsHash);
+        let { currentActionsHash, currentIndex, currentNftsCommitment } =
+          rollupStateTransform({
+            currAction,
+            currMerkleProof,
+            currentActionsHash: prevCurrActionsHash,
+            currentIndex: prevCurrIndex,
+            currentNftsCommitment: prevNftsCommitment,
+          });
 
-        // validate current index
-        let newCurrIdx = Circuit.if(
-          currAction.isMint().and(prevCurrIndex.lt(NFT_SUPPLY)),
-          prevCurrIndex.add(1),
-          prevCurrIndex
-        );
-        newCurrIdx.assertEquals(afterCurrIndex);
-
-        // validate nfts commitment
-        merkleProof.root.assertEquals(prevStateRoot);
-        let idx1 = Circuit.if(
-          prevCurrIndex.lt(NFT_SUPPLY),
-          newCurrIdx,
-          DUMMY_NFT_ID
-        );
-        let finalIdx = Circuit.if(
-          currAction.isTransfer(),
-          currAction.nft.id,
-          idx1
-        );
-
-        let updateNFTHash = Circuit.if(
-          finalIdx.equals(DUMMY_NFT_ID),
-          SMT_EMPTY_VALUE,
-          Circuit.if(
-            currAction.isMint(),
-            currAction.nft.assignId(finalIdx).hash(),
-            // Check whether the transfer is valid
-            Circuit.if(
-              merkleProof.verifyByFieldInCircuit(
-                prevStateRoot,
-                currAction.originalNFTHash
-              ),
-              currAction.nft.hash(),
-              SMT_EMPTY_VALUE
-            )
-          )
-        );
-
-        let newStateRoot = Circuit.if(
-          finalIdx.equals(DUMMY_NFT_ID),
-          prevStateRoot,
-          merkleProof.computeRootByFieldInCircuit(updateNFTHash)
-        );
-
-        newStateRoot.assertEquals(afterStateRoot);
+        currentActionsHash.assertEquals(afterCurrActonsHash);
+        Circuit.asProver(() => {
+          console.log(
+            `currentActionsHash: ${currentActionsHash.toString()} assert success`
+          );
+        });
+        currentIndex.assertEquals(afterCurrIndex);
+        Circuit.asProver(() => {
+          console.log(
+            `currentIndex: ${currentIndex.toString()} assert success`
+          );
+        });
+        currentNftsCommitment.assertEquals(afterNfsCommitment);
+        Circuit.asProver(() => {
+          console.log(
+            `currentNftsCommitment: ${currentNftsCommitment.toString()} assert success`
+          );
+        });
       },
     },
 
@@ -247,17 +273,20 @@ let NftRollupProverHelper = {
           currAction.originalNFTHash
         );
         if (nftExist) {
+          console.log('nft exist, id: ', currentNftId.toString());
           let currentMerkleProof = deepSubTree.prove(currentNftId);
           newMerkleProofs.push(currentMerkleProof);
 
           let currentNftHash = currAction.nft.hash();
           deepSubTree.update(currentNftId, currentNftHash);
         } else {
-          newMerkleProofs.push(dummyProof!);
+          console.log('fake nft, id: ', currentNftId.toString());
+          newMerkleProofs.push(dummyProof);
         }
       }
     }
 
+    // pad action array
     let dummyAction = Action.empty();
     for (let i = actions.length; i < ActionBatch.batchSize; i++) {
       actions.push(dummyAction);

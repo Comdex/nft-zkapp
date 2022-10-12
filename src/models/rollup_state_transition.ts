@@ -25,4 +25,11 @@ class RollupStateTransition extends CircuitValue {
   hash(): Field {
     return Poseidon.hash(this.toFields());
   }
+
+  toPretty(): any {
+    return {
+      source: this.source.toPretty(),
+      target: this.target.toPretty(),
+    };
+  }
 }

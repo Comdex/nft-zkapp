@@ -131,15 +131,16 @@ async function test() {
 
   // fake nft test
   let nft = await getNFTFromIndexer(BigInt(1));
-  nft.data = new NFTData([Field.zero, Field.one]);
-  console.log('fake nft id: ', nft.toPretty());
+  let newNft = nft.clone();
+  newNft.data = new NFTData([Field.zero, Field.one]);
+  console.log('fake nft id: ', newNft.toPretty());
   tx = await Mina.transaction(feePayerKey, () => {
-    zkapp.transfer(receiverPublicKey, nft, callerKey);
+    zkapp.transfer(receiverPublicKey, newNft, callerKey);
     if (!doProofs) zkapp.sign(zkappKey);
   });
   if (doProofs) await tx.prove();
   tx.send();
-  console.log('fake nft transfer tx success, nft: ', nft.toPretty());
+  console.log('fake nft transfer tx success, nft: ', newNft.toPretty());
 
   // second rollup
   // 1. execute the contract rollup method

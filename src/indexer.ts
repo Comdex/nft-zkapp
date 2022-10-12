@@ -120,7 +120,7 @@ async function updateIndexerMerkleTree(
       curPos = curPos + 1n;
       console.log('indexer-mint nft id: ', curPos.toString());
       root = await tree.update(curPos, action.nft.assignId(Field(curPos)));
-    } else {
+    } else if (action.isTransfer().toBoolean()) {
       // transfer action
       console.log('indexer-transfer nft id: ', currentId.toString());
 
@@ -128,7 +128,7 @@ async function updateIndexerMerkleTree(
       let nftValue = await tree.get(currentId.toBigInt());
       if (
         nftValue === null ||
-        !nftValue.hash().equals(action.originalNFTHash)
+        !nftValue.hash().equals(action.originalNFTHash).toBoolean()
       ) {
         nftExist = false;
       }
