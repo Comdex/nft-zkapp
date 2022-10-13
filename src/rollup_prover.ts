@@ -87,8 +87,20 @@ function rollupStateTransform(currStateData: {
     )
   );
 
+  let isProofValid = currMerkleProof.path
+    .equals(updateNftId)
+    .and(
+      currMerkleProof.verifyByFieldInCircuit(
+        currentNftsCommitment,
+        currAction.originalNFTHash
+      )
+    );
+
   currentNftsCommitment = Circuit.if(
-    updateNftId.equals(DUMMY_NFT_ID).and(updateNFTHash.equals(SMT_EMPTY_VALUE)),
+    updateNftId
+      .equals(DUMMY_NFT_ID)
+      .and(updateNFTHash.equals(SMT_EMPTY_VALUE))
+      .or(isProofValid.not()),
     currentNftsCommitment,
     currMerkleProof.computeRootByFieldInCircuit(updateNFTHash)
   );
