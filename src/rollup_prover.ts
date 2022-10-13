@@ -5,7 +5,7 @@ import {
   Field,
   isReady,
   SelfProof,
-  SequenceEvents,
+  AccountUpdate,
 } from 'snarkyjs';
 import { NFT_SUPPLY } from './constant';
 import { Action } from './models/action';
@@ -38,11 +38,14 @@ function rollupStateTransform(currStateData: {
     currentNftsCommitment,
   } = currStateData;
   // compute actions hash
-  let eventHash = SequenceEvents.hash([currAction.toFields()]);
+  let eventHash = AccountUpdate.SequenceEvents.hash([currAction.toFields()]);
   currentActionsHash = Circuit.if(
     currAction.isDummyData(),
     currentActionsHash,
-    SequenceEvents.updateSequenceState(currentActionsHash, eventHash)
+    AccountUpdate.SequenceEvents.updateSequenceState(
+      currentActionsHash,
+      eventHash
+    )
   );
 
   // compute current index
@@ -254,8 +257,10 @@ let NftRollupProverHelper = {
       let currAction = actions[i];
 
       // compute new actions hash
-      let eventHash = SequenceEvents.hash([currAction.toFields()]);
-      currentActionsHash = SequenceEvents.updateSequenceState(
+      let eventHash = AccountUpdate.SequenceEvents.hash([
+        currAction.toFields(),
+      ]);
+      currentActionsHash = AccountUpdate.SequenceEvents.updateSequenceState(
         currentActionsHash,
         eventHash
       );
@@ -333,11 +338,12 @@ let NftRollupProverHelper = {
     let supply = NFT_SUPPLY;
 
     // compute new actions hash
-    let eventHash = SequenceEvents.hash([currAction.toFields()]);
-    let newCurrentActionsHash = SequenceEvents.updateSequenceState(
-      currentActionsHash,
-      eventHash
-    );
+    let eventHash = AccountUpdate.SequenceEvents.hash([currAction.toFields()]);
+    let newCurrentActionsHash =
+      AccountUpdate.SequenceEvents.updateSequenceState(
+        currentActionsHash,
+        eventHash
+      );
 
     let currentNftId = currAction.nft.id;
     let currentNftHash = currAction.nft.hash();
