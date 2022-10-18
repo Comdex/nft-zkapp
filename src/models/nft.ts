@@ -41,21 +41,12 @@ class NFTData extends CircuitValue {
   }
 
   clone(): NFTData {
-    let newContent = this.content.map((v) => v);
+    let newContent = this.content.slice();
     return new NFTData(newContent);
   }
 
   getNFTString(): string {
-    let realStr: Field[] = [];
-    for (let i = 0; i < this.content.length; i++) {
-      let f = this.content[i];
-      if (f.equals(DUMMY_DATA_FIELD).toBoolean()) {
-        break;
-      }
-      realStr.push(f);
-    }
-
-    return Encoding.Bijective.Fp.toString(realStr);
+    return Encoding.Bijective.Fp.toString(this.content);
   }
 
   toPretty(): any {

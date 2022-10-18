@@ -35,7 +35,7 @@ class NftZkapp extends SmartContract {
   reducer = Experimental.Reducer({ actionType: Action });
 
   @state(RollupState) state = State<RollupState>();
-
+  
   indexerUrl: string;
 
   deploy(args: DeployArgs) {

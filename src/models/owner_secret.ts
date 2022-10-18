@@ -82,11 +82,9 @@ class OwnerSecretCipherText extends CircuitValue {
   }
 
   clone(): OwnerSecretCipherText {
-    let newCipherText: Field[] = [];
-    this.cipherText.forEach((v) => {
-      newCipherText.push(v);
-    });
+    let newCipherText = this.cipherText.slice();
+    let newPublicKey = this.publicKey.slice();
 
-    return new OwnerSecretCipherText(this.publicKey, newCipherText);
+    return new OwnerSecretCipherText(newPublicKey, newCipherText);
   }
 }
