@@ -1,4 +1,4 @@
-import { NumIndexSparseMerkleTree } from 'snarky-smt';
+import { BaseMerkleProof, MerkleTree } from 'snarky-smt';
 import { Field } from 'snarkyjs';
 import { MAX_ACTIONS_NUM, NFT_SUPPLY } from './constant';
 import { merkleTree } from './global';
@@ -6,12 +6,17 @@ import { Action } from './models/action';
 import { NFT } from './models/nft';
 import { NftZkapp, NFT_INIT_ACTIONSHASH, NFT_INIT_INDEX } from './nft_zkapp';
 
-export { getPendingActions, getNFTFromIndexer, runIndexer };
+export { getPendingActions, getNFTFromIndexer, runIndexer, getProof };
 
 let indexerState = {
   lastProcessedIndex: NFT_INIT_INDEX.toBigInt(),
   lastProcessedActionsHash: NFT_INIT_ACTIONSHASH,
 };
+
+async function getProof(id: bigint): Promise<BaseMerkleProof> {
+  let proof = await merkleTree.prove(id);
+  return proof;
+}
 
 async function getNFTFromIndexer(id: bigint): Promise<NFT> {
   let nft = await merkleTree.get(id);
@@ -99,7 +104,7 @@ function getPendingActions(
 }
 
 async function updateIndexerMerkleTree(
-  tree: NumIndexSparseMerkleTree<NFT>,
+  tree: MerkleTree<NFT>,
   pendingActions: Action[],
   lastIndex: bigint,
   currentIndex: Field,

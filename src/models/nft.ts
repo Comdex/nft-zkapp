@@ -27,13 +27,13 @@ class NFTData extends CircuitValue {
 
   constructor(content: Field[]) {
     super();
-    if (content.length > MAX_CONTENT_LENGTH) {
+    let len = content.length;
+    if (len > MAX_CONTENT_LENGTH) {
       throw new Error('The character limit is exceeded');
     }
-    for (let i = content.length; i < MAX_CONTENT_LENGTH; i++) {
-      content.push(DUMMY_DATA_FIELD);
-    }
-    this.content = content;
+    this.content = content.concat(
+      Array(MAX_CONTENT_LENGTH - len).fill(DUMMY_DATA_FIELD)
+    );
   }
 
   hash(): Field {
@@ -41,21 +41,12 @@ class NFTData extends CircuitValue {
   }
 
   clone(): NFTData {
-    let newContent = this.content.map((v) => v);
+    let newContent = this.content.slice();
     return new NFTData(newContent);
   }
 
   getNFTString(): string {
-    let realStr: Field[] = [];
-    for (let i = 0; i < this.content.length; i++) {
-      let f = this.content[i];
-      if (f.equals(DUMMY_DATA_FIELD).toBoolean()) {
-        break;
-      }
-      realStr.push(f);
-    }
-
-    return Encoding.Bijective.Fp.toString(realStr);
+    return Encoding.Bijective.Fp.toString(this.content);
   }
 
   toPretty(): any {
@@ -70,11 +61,7 @@ class NFT extends CircuitValue {
   @prop ownerSecret: OwnerSecretCipherText;
   @prop data: NFTData;
 
-  private constructor(
-    id: Field,
-    ownerSecret: OwnerSecretCipherText,
-    data: NFTData
-  ) {
+  constructor(id: Field, ownerSecret: OwnerSecretCipherText, data: NFTData) {
     super();
     this.id = id;
     this.ownerSecret = ownerSecret;
@@ -105,7 +92,9 @@ class NFT extends CircuitValue {
   }
 
   checkOwner(ownerPrivateKey: PrivateKey): Bool {
-    return this.ownerSecret.checkOwner(ownerPrivateKey);
+    // mock
+    return Bool(true);
+    // return this.ownerSecret.checkOwner(ownerPrivateKey);
   }
 
   clone(): NFT {

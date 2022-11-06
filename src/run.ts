@@ -5,12 +5,14 @@ import {
   Permissions,
   shutdown,
   Field,
+  verify,
 } from 'snarkyjs';
 import { runRollupBatchProve } from './client';
 import { ACTION_BATCH_SIZE } from './constant';
 import { getNFTFromIndexer, runIndexer } from './indexer';
 import { NFT, NFTData } from './models/nft';
 import { NftZkapp } from './nft_zkapp';
+import { OwnershipProver, OwnershipProverHelper } from './ownership_prover';
 import { NftRollupProver } from './rollup_prover';
 
 const doProofs = true;
@@ -113,6 +115,26 @@ async function test() {
   } else {
     throw new Error('rollup 1 execution error');
   }
+
+  // prove ownership statement
+  console.time('OwnershipProver compile');
+  let { verificationKey } = await OwnershipProver.compile();
+  console.timeEnd('OwnershipProver compile');
+  let nft1 = await getNFTFromIndexer(BigInt(1));
+  let statement = OwnershipProverHelper.proveOwnership(
+    'I am Mike',
+    callerKey,
+    nft1
+  );
+
+  let ownerProof = await OwnershipProver.proveOwnership(
+    statement,
+    callerKey,
+    nft1
+  );
+
+  let ok = await verify(ownerProof.toJSON(), verificationKey);
+  if (!ok) throw Error('OwnershipStatement verification failure!');
 
   // ------------------------------------------------------------------------
 
