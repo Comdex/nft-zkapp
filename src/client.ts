@@ -1,5 +1,4 @@
-import { NumIndexDeepSparseMerkleSubTree, SMT_EMPTY_VALUE } from 'snarky-smt';
-import { Field } from 'snarkyjs';
+import { Field, Poseidon } from 'snarkyjs';
 import {
   NftRollupProof,
   NftRollupProver,
@@ -13,6 +12,7 @@ import { MerkleProof, ProofWithValueHash } from './models/proofs';
 import { NftZkapp } from './nft_zkapp';
 import { ActionBatch } from './models/action_batch';
 import { RollupState } from './models/rollup_state';
+import { DeepMerkleSubTree, ProvableMerkleTreeUtils } from 'snarky-smt';
 
 export { runRollupProve, runRollupBatchProve };
 
@@ -41,18 +41,20 @@ async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
   let proofValues: ProofWithValueHash[] = [];
 
   let zeroProof = await merkleTree.prove(0n);
-  proofValues.push(new ProofWithValueHash(zeroProof, SMT_EMPTY_VALUE));
+  proofValues.push(
+    new ProofWithValueHash(zeroProof, 0n, ProvableMerkleTreeUtils.EMPTY_VALUE)
+  );
 
   for (let i = 0, len = indexes.length; i < len; i++) {
     let id = indexes[i];
     let proof = await merkleTree.prove(id);
-    let valueHash = SMT_EMPTY_VALUE;
+    let valueHash = ProvableMerkleTreeUtils.EMPTY_VALUE;
     let value = await merkleTree.get(id);
 
     if (value !== null) {
       valueHash = value.hash();
     }
-    proofValues.push(new ProofWithValueHash(proof, valueHash));
+    proofValues.push(new ProofWithValueHash(proof, id, valueHash));
   }
 
   return { proofValues, zeroProof };
@@ -61,15 +63,20 @@ async function getProofValuesByIndexes(indexes: bigint[]): Promise<{
 function constructDeepSubTree(
   proofValues: ProofWithValueHash[],
   nftsCommitment: Field
-): NumIndexDeepSparseMerkleSubTree {
-  let deepSubTree = new NumIndexDeepSparseMerkleSubTree(
-    nftsCommitment,
-    TREE_HEIGHT
-  );
+): DeepMerkleSubTree<Field> {
+  let deepSubTree = new DeepMerkleSubTree(nftsCommitment, TREE_HEIGHT, {
+    hasher: Poseidon.hash,
+    hashValue: false,
+  });
 
   for (let i = 0, len = proofValues.length; i < len; i++) {
     let proofValueHash = proofValues[i];
-    deepSubTree.addBranch(proofValueHash.proof, proofValueHash.valueHash, true);
+    deepSubTree.addBranch(
+      proofValueHash.proof,
+      proofValueHash.index,
+      proofValueHash.valueHash,
+      true
+    );
   }
 
   return deepSubTree;
@@ -77,7 +84,7 @@ function constructDeepSubTree(
 
 async function prepareForRollup(zkapp: NftZkapp): Promise<{
   pendingActions: Action[];
-  deepSubTree: NumIndexDeepSparseMerkleSubTree;
+  deepSubTree: DeepMerkleSubTree<Field>;
   currentState: RollupState;
   indexes: bigint[];
   zeroProof: MerkleProof;

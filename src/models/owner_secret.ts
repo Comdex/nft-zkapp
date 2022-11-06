@@ -56,7 +56,7 @@ class OwnerSecretCipherText extends CircuitValue {
     return new OwnerSecret(owner, blinding).encrypt();
   }
 
-  toPlainJsObj(): any {
+  toPretty(): any {
     return {
       publicKey: this.publicKey.toString(),
       cipherText: this.cipherText.toString(),

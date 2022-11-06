@@ -1,4 +1,4 @@
-import { createEmptyValue, SMT_EMPTY_VALUE } from 'snarky-smt';
+import { createEmptyValue, ProvableMerkleTreeUtils } from 'snarky-smt';
 import { Bool, CircuitValue, Field, isReady, prop } from 'snarkyjs';
 import { NFT } from './nft';
 
@@ -9,7 +9,7 @@ export { ACTION_TYPE_MINT, ACTION_TYPE_TRANSFER, Action };
 const ACTION_TYPE_DUMMY = Field(0);
 const ACTION_TYPE_MINT = Field(1);
 const ACTION_TYPE_TRANSFER = Field(2);
-const DUMMY_ORIGINALNFTHASH = SMT_EMPTY_VALUE;
+const DUMMY_ORIGINALNFTHASH = ProvableMerkleTreeUtils.EMPTY_VALUE;
 
 class Action extends CircuitValue {
   @prop type: Field;

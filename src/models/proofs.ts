@@ -1,20 +1,21 @@
-import { NumIndexSparseMerkleProof } from 'snarky-smt';
-import { CircuitValue, Field, isReady, prop } from 'snarkyjs';
+import { ProvableMerkleTreeUtils } from 'snarky-smt';
+import { Field, isReady } from 'snarkyjs';
 import { TREE_HEIGHT } from '../constant';
 
 await isReady;
 
 export { MerkleProof, ProofWithValueHash };
 
-class MerkleProof extends NumIndexSparseMerkleProof(TREE_HEIGHT) {}
+class MerkleProof extends ProvableMerkleTreeUtils.MerkleProof(TREE_HEIGHT) {}
 
-class ProofWithValueHash extends CircuitValue {
-  @prop proof: MerkleProof;
-  @prop valueHash: Field;
+class ProofWithValueHash {
+  proof: MerkleProof;
+  index: bigint;
+  valueHash: Field;
 
-  constructor(proof: MerkleProof, valueHash: Field) {
-    super();
+  constructor(proof: MerkleProof, index: bigint, valueHash: Field) {
     this.proof = proof;
+    this.index = index;
     this.valueHash = valueHash;
   }
 }
