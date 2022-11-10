@@ -103,6 +103,9 @@ class NftZkapp extends SmartContract {
     let state = this.state.get();
     this.state.assertEquals(state);
 
+    this.account.sequenceState.assertEquals(
+      proof.publicInput.target.currentActionsHash
+    );
     proof.publicInput.source.assertEquals(state);
     this.state.set(proof.publicInput.target);
   }
