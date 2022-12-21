@@ -5,7 +5,7 @@ import { OwnershipStatement } from './models/ownership_statement';
 export { OwnershipProver, OwnershipProverHelper };
 
 let OwnershipProver = Experimental.ZkProgram({
-  publicInput: OwnershipStatement,
+  publicInput: OwnershipStatement as any,
 
   methods: {
     proveOwnership: {

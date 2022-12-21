@@ -1,5 +1,5 @@
 import { createEmptyValue, ProvableMerkleTreeUtils } from 'snarky-smt';
-import { Bool, CircuitValue, Field, isReady, prop } from 'snarkyjs';
+import { Bool, Field, isReady, Struct } from 'snarkyjs';
 import { NFT } from './nft';
 
 await isReady;
@@ -11,18 +11,7 @@ const ACTION_TYPE_MINT = Field(1);
 const ACTION_TYPE_TRANSFER = Field(2);
 const DUMMY_ORIGINALNFTHASH = ProvableMerkleTreeUtils.EMPTY_VALUE;
 
-class Action extends CircuitValue {
-  @prop type: Field;
-  @prop originalNFTHash: Field;
-  @prop nft: NFT;
-
-  constructor(type: Field, originalNFTHash: Field, nft: NFT) {
-    super();
-    this.type = type;
-    this.originalNFTHash = originalNFTHash;
-    this.nft = nft;
-  }
-
+class Action extends Struct({ type: Field, originalNFTHash: Field, nft: NFT }) {
   isMint(): Bool {
     return this.type.equals(ACTION_TYPE_MINT);
   }
@@ -38,9 +27,13 @@ class Action extends CircuitValue {
   toPretty(): any {
     return {
       type: this.type.toString(),
-      nft: this.nft.toPretty(),
+      nft: (this.nft as NFT).toPretty(),
       originalNFTHash: this.originalNFTHash.toString(),
     };
+  }
+
+  toFields(): Field[] {
+    return Action.toFields(this);
   }
 
   toString(): string {
@@ -48,14 +41,18 @@ class Action extends CircuitValue {
   }
 
   static empty(): Action {
-    return createEmptyValue(Action);
+    return createEmptyValue(Action) as Action;
   }
 
   static mint(nft: NFT): Action {
-    return new Action(ACTION_TYPE_MINT, DUMMY_ORIGINALNFTHASH, nft);
+    return new Action({
+      type: ACTION_TYPE_MINT,
+      originalNFTHash: DUMMY_ORIGINALNFTHASH,
+      nft,
+    });
   }
 
-  static transfer(nft: NFT, originalNFTHash: Field) {
-    return new Action(ACTION_TYPE_TRANSFER, originalNFTHash, nft);
+  static transfer(nft: NFT, originalNFTHash: Field): Action {
+    return new Action({ type: ACTION_TYPE_TRANSFER, originalNFTHash, nft });
   }
 }

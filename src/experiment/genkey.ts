@@ -1,4 +1,13 @@
-import { Field, isReady, PrivateKey } from 'snarkyjs';
+import {
+  Bool,
+  Circuit,
+  Field,
+  isReady,
+  PrivateKey,
+  Provable,
+  ProvablePure,
+  Struct,
+} from 'snarkyjs';
 await isReady;
 
 let priKey = PrivateKey.random();
@@ -11,7 +20,7 @@ console.log('pubKey: ', pubKey.toBase58());
 
 console.log('pow: ', pow(Field(10), Field(5), 20).toString());
 
-function pow(base: Field, exp: Field, expBits: number): Field {
+function pow(base: Field, exp: Field, expBits: number = 32): Field {
   let r = Field(1);
   let b = exp.toBits(expBits);
 

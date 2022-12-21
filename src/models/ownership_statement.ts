@@ -1,36 +1,22 @@
 import {
-  arrayProp,
-  CircuitValue,
+  Circuit,
   Encoding,
   Field,
   PrivateKey,
-  prop,
   Signature,
+  Struct,
 } from 'snarkyjs';
 import { NFT } from './nft';
 
 export { OwnershipStatement };
 
 const MAX_STRING_FIELD = 8;
-class OwnershipStatement extends CircuitValue {
-  @arrayProp(Field, MAX_STRING_FIELD) statement: Field[];
-  @prop ownerSign: Signature;
-  @prop nftId: Field;
-  @prop nftHash: Field;
-
-  constructor(
-    statement: Field[],
-    ownerSign: Signature,
-    nftId: Field,
-    nftHash: Field
-  ) {
-    super();
-    this.statement = statement;
-    this.ownerSign = ownerSign;
-    this.nftId = nftId;
-    this.nftHash = nftHash;
-  }
-
+class OwnershipStatement extends Struct({
+  statement: Circuit.array(Field, MAX_STRING_FIELD),
+  ownerSign: Signature,
+  nftId: Field,
+  nftHash: Field,
+}) {
   static create(statement: string, ownerPrivateKey: PrivateKey, nft: NFT) {
     let statementFs = Encoding.Bijective.Fp.fromString(statement);
     if (statementFs.length > MAX_STRING_FIELD) {
@@ -43,6 +29,11 @@ class OwnershipStatement extends CircuitValue {
 
     let sign = Signature.create(ownerPrivateKey, fs);
 
-    return new OwnershipStatement(fs, sign, nft.id, nft.hash());
+    return new OwnershipStatement({
+      statement: fs,
+      ownerSign: sign,
+      nftId: nft.id,
+      nftHash: nft.hash(),
+    });
   }
 }

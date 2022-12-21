@@ -48,9 +48,9 @@
     "typescript": "^4.7.2"
   },
   "peerDependencies": {
-    "snarkyjs": "npm:snarkyjs-test@^0.6.1"
+    "snarkyjs": "^0.7.3"
   },
   "dependencies": {
-    "snarky-smt": "^0.5.1"
+    "snarky-smt": "^0.6.0"
   }
 }

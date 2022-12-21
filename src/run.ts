@@ -19,7 +19,7 @@ const doProofs = true;
 const mintTxns = ACTION_BATCH_SIZE;
 const transferTxns = ACTION_BATCH_SIZE;
 
-let Local = Mina.LocalBlockchain();
+let Local = Mina.LocalBlockchain({ proofsEnabled: doProofs });
 Mina.setActiveInstance(Local);
 
 let feePayerKey = Local.testAccounts[0].privateKey;
@@ -64,17 +64,16 @@ async function test() {
       });
     }
   });
-  tx.send();
+  await tx.send();
   console.log('deploy done');
 
   // mint nft
   for (let i = 1; i <= mintTxns; i++) {
     tx = await Mina.transaction(feePayerKey, () => {
       zkapp.mint(NFT.createNFT('Mina Genesis ' + i, callerPublicKey));
-      if (!doProofs) zkapp.sign(zkappKey);
     });
-    if (doProofs) await tx.prove();
-    tx.send();
+    await tx.prove();
+    await tx.sign([zkappKey]).send();
   }
 
   let sequenceState = zkapp.account.sequenceState.get();
@@ -91,10 +90,9 @@ async function test() {
 
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.rollup(mergedProof!);
-    if (!doProofs) zkapp.sign(zkappKey);
   });
-  if (doProofs) await tx.prove();
-  tx.send();
+  await tx.prove();
+  await tx.sign([zkappKey]).send();
 
   console.log('zkapp rollup tx 1 end');
 
@@ -144,24 +142,22 @@ async function test() {
     console.log('current nft: ', nft.toPretty());
     tx = await Mina.transaction(feePayerKey, () => {
       zkapp.transfer(receiverPublicKey, nft, callerKey);
-      if (!doProofs) zkapp.sign(zkappKey);
     });
-    if (doProofs) await tx.prove();
-    tx.send();
+    await tx.prove();
+    await tx.sign([zkappKey]).send();
     console.log('nft transfer tx success, id: ', i);
   }
 
   // fake nft test
   let nft = await getNFTFromIndexer(BigInt(1));
   let newNft = nft.clone();
-  newNft.data = new NFTData([Field.zero, Field.one]);
+  newNft.data = new NFTData({ content: [Field(0), Field(0)] });
   console.log('fake nft id: ', newNft.toPretty());
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.transfer(receiverPublicKey, newNft, callerKey);
-    if (!doProofs) zkapp.sign(zkappKey);
   });
-  if (doProofs) await tx.prove();
-  tx.send();
+  await tx.prove();
+  await tx.sign([zkappKey]).send();
   console.log('fake nft transfer tx success, nft: ', newNft.toPretty());
 
   // second rollup
@@ -172,10 +168,9 @@ async function test() {
 
   tx = await Mina.transaction(feePayerKey, () => {
     zkapp.rollup(mergedProof!);
-    if (!doProofs) zkapp.sign(zkappKey);
   });
-  if (doProofs) await tx.prove();
-  tx.send();
+  await tx.prove();
+  await tx.sign([zkappKey]).send();
 
   console.log('zkapp rollup tx 2 end');
 

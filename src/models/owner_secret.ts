@@ -1,59 +1,43 @@
 import {
-  arrayProp,
   Bool,
-  CircuitValue,
+  Circuit,
   Encryption,
   Field,
   Group,
   isReady,
   PrivateKey,
-  prop,
   PublicKey,
+  Struct,
 } from 'snarkyjs';
 
 await isReady;
 
 export { OwnerSecret, OwnerSecretCipherText };
 
-class OwnerSecret extends CircuitValue {
-  @prop owner: PublicKey;
-  @prop blinding: Field; //random number
-
-  constructor(owner: PublicKey, blinding: Field) {
-    super();
-    this.owner = owner;
-    this.blinding = blinding;
-  }
-
+class OwnerSecret extends Struct({ owner: PublicKey, blinding: Field }) {
   encrypt(): OwnerSecretCipherText {
-    let newFields = this.toFields().map((v) => v);
-    let newPublicKey = PublicKey.ofFields(this.owner.toFields());
+    let newFields = OwnerSecret.toFields(this).slice();
+    let newPublicKey = PublicKey.fromFields(this.owner.toFields());
     const cipherText = Encryption.encrypt(newFields, newPublicKey);
 
-    return new OwnerSecretCipherText(
-      [cipherText.publicKey.x, cipherText.publicKey.y],
-      cipherText.cipherText
-    );
+    return new OwnerSecretCipherText({
+      publicKey: [cipherText.publicKey.x, cipherText.publicKey.y],
+      cipherText: cipherText.cipherText,
+    });
   }
 }
 
 const CIPHER_TEXT_LENGTH = OwnerSecret.sizeInFields() + 1;
 
-class OwnerSecretCipherText extends CircuitValue {
-  @arrayProp(Field, 2) publicKey: Field[];
-  @arrayProp(Field, CIPHER_TEXT_LENGTH) cipherText: Field[];
-
-  constructor(publicKey: Field[], cipherText: Field[]) {
-    super();
-    this.publicKey = publicKey;
-    this.cipherText = cipherText;
-  }
-
+class OwnerSecretCipherText extends Struct({
+  publicKey: Circuit.array(Field, 2),
+  cipherText: Circuit.array(Field, CIPHER_TEXT_LENGTH),
+}) {
   static create(
     owner: PublicKey,
     blinding: Field = Field.random()
   ): OwnerSecretCipherText {
-    return new OwnerSecret(owner, blinding).encrypt();
+    return new OwnerSecret({ owner, blinding }).encrypt();
   }
 
   toPretty(): any {
@@ -64,7 +48,7 @@ class OwnerSecretCipherText extends CircuitValue {
   }
 
   decrypt(ownerPrivateKey: PrivateKey): OwnerSecret {
-    let newCipherText: Field[] = this.cipherText.map((v) => v);
+    let newCipherText: Field[] = this.cipherText.slice();
     let newPublicKey = new Group(this.publicKey[0], this.publicKey[1]);
 
     const decryptedFields = Encryption.decrypt(
@@ -72,7 +56,7 @@ class OwnerSecretCipherText extends CircuitValue {
       ownerPrivateKey
     );
 
-    return OwnerSecret.ofFields(decryptedFields);
+    return OwnerSecret.fromFields(decryptedFields) as OwnerSecret;
   }
 
   checkOwner(ownerPrivateKey: PrivateKey): Bool {
@@ -85,6 +69,9 @@ class OwnerSecretCipherText extends CircuitValue {
     let newCipherText = this.cipherText.slice();
     let newPublicKey = this.publicKey.slice();
 
-    return new OwnerSecretCipherText(newPublicKey, newCipherText);
+    return new OwnerSecretCipherText({
+      publicKey: newPublicKey,
+      cipherText: newCipherText,
+    });
   }
 }

@@ -1,35 +1,32 @@
-import { CircuitValue, Field, isReady, Poseidon, prop } from 'snarkyjs';
+import { Field, isReady, Poseidon, Struct } from 'snarkyjs';
 import { RollupState } from './rollup_state';
 
 await isReady;
 
 export { RollupStateTransition };
 
-class RollupStateTransition extends CircuitValue {
-  @prop source: RollupState;
-  @prop target: RollupState;
-
-  constructor(source: RollupState, target: RollupState) {
-    super();
-    this.source = source;
-    this.target = target;
-  }
-
+class RollupStateTransition extends Struct({
+  source: RollupState,
+  target: RollupState,
+}) {
   static from(stateTransition: {
     source: RollupState;
     target: RollupState;
   }): RollupStateTransition {
-    return new this(stateTransition.source, stateTransition.target);
+    return new this({
+      source: stateTransition.source,
+      target: stateTransition.target,
+    });
   }
 
   hash(): Field {
-    return Poseidon.hash(this.toFields());
+    return Poseidon.hash(RollupStateTransition.toFields(this));
   }
 
   toPretty(): any {
     return {
-      source: this.source.toPretty(),
-      target: this.target.toPretty(),
+      source: (this.source as RollupState).toPretty(),
+      target: (this.target as RollupState).toPretty(),
     };
   }
 }

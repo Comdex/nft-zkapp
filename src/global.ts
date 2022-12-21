@@ -4,4 +4,8 @@ import { NFT } from './models/nft';
 
 export { merkleTree };
 
-let merkleTree = await MerkleTree.build<NFT>(new MemoryStore(), TREE_HEIGHT);
+let merkleTree = await MerkleTree.build(
+  new MemoryStore<NFT>(),
+  TREE_HEIGHT,
+  NFT
+);
