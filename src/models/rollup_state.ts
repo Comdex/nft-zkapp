@@ -1,39 +1,32 @@
-import { CircuitValue, Field, isReady, Poseidon, prop } from 'snarkyjs';
+import { Circuit, Field, isReady, Poseidon, Struct } from 'snarkyjs';
 
 await isReady;
 
 export { RollupState };
 
-class RollupState extends CircuitValue {
-  @prop nftsCommitment: Field;
-  @prop currentIndex: Field;
-  @prop currentActionsHash: Field;
-
-  constructor(
-    nftsCommitment: Field,
-    currentIndex: Field,
-    currentActionsHash: Field
-  ) {
-    super();
-    this.nftsCommitment = nftsCommitment;
-    this.currentIndex = currentIndex;
-    this.currentActionsHash = currentActionsHash;
-  }
-
+class RollupState extends Struct({
+  nftsCommitment: Field,
+  currentIndex: Field,
+  currentActionsHash: Field,
+}) {
   static from(state: {
     nftsCommitment: Field;
     currentIndex: Field;
     currentActionsHash: Field;
   }) {
-    return new this(
-      state.nftsCommitment,
-      state.currentIndex,
-      state.currentActionsHash
-    );
+    return new this({
+      nftsCommitment: state.nftsCommitment,
+      currentIndex: state.currentIndex,
+      currentActionsHash: state.currentActionsHash,
+    });
+  }
+
+  assertEquals(other: RollupState) {
+    Circuit.assertEqual(RollupState, this, other);
   }
 
   hash(): Field {
-    return Poseidon.hash(this.toFields());
+    return Poseidon.hash(RollupState.toFields(this));
   }
 
   toPretty(): any {

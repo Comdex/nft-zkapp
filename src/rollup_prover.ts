@@ -1,16 +1,21 @@
-import { DeepMerkleSubTree, ProvableMerkleTreeUtils } from 'snarky-smt';
+import {
+  createEmptyValue,
+  DeepMerkleSubTree,
+  ProvableMerkleTreeUtils,
+} from 'snarky-smt';
 import {
   Circuit,
   Experimental,
   Field,
   isReady,
   SelfProof,
+  Struct,
   AccountUpdate,
 } from 'snarkyjs';
 import { NFT_SUPPLY } from './constant';
 import { Action } from './models/action';
 import { ActionBatch } from './models/action_batch';
-import { DUMMY_NFT_ID } from './models/nft';
+import { DUMMY_NFT_HASH, DUMMY_NFT_ID, NFT } from './models/nft';
 import { MerkleProof } from './models/proofs';
 import { RollupState } from './models/rollup_state';
 import { RollupStateTransition } from './models/rollup_state_transition';
@@ -18,6 +23,8 @@ import { RollupStateTransition } from './models/rollup_state_transition';
 export { NftRollupProver, NftRollupProof, NftRollupProverHelper };
 
 await isReady;
+
+class NFTResult extends Struct({ id: Field, hash: Field }) {}
 
 function rollupStateTransform(currStateData: {
   currAction: Action;
@@ -48,73 +55,57 @@ function rollupStateTransform(currStateData: {
     )
   );
 
-  // compute current index
+  // process mint
+  let isMint = currAction.isMint();
   currentIndex = Circuit.if(
-    currAction.isMint().and(currentIndex.lt(NFT_SUPPLY)),
+    isMint.and(currentIndex.lt(NFT_SUPPLY)),
     currentIndex.add(1),
     currentIndex
   );
+  let mintNftHash = (currAction.nft as NFT).assignId(currentIndex).hash();
+  let mintResult = { id: currentIndex, hash: mintNftHash };
 
-  // compute nft id
-  let idxAfterCheckSupply = Circuit.if(
-    currentIndex.lt(NFT_SUPPLY),
-    currentIndex,
-    DUMMY_NFT_ID
-  );
-  let idxAfterCheckIsTransfer = Circuit.if(
-    currAction.isTransfer(),
-    currAction.nft.id,
-    idxAfterCheckSupply
-  );
-  let finalIdx = Circuit.if(
-    currAction.isDummyData(),
-    DUMMY_NFT_ID,
-    idxAfterCheckIsTransfer
-  );
+  // process transfer
+  let isTransfer = currAction.isTransfer();
+  let transferNftHash = (currAction.nft as NFT).hash();
+  let transferResult = {
+    id: currAction.nft.id,
+    hash: transferNftHash,
+  };
 
-  let [updateNftId, updateNFTHash] = Circuit.if(
-    finalIdx.equals(DUMMY_NFT_ID),
-    [DUMMY_NFT_ID, ProvableMerkleTreeUtils.EMPTY_VALUE],
-    Circuit.if(
-      currAction.isMint(),
-      [finalIdx, currAction.nft.assignId(finalIdx).hash()],
-      // Check whether the transfer is valid
-      Circuit.if(
-        ProvableMerkleTreeUtils.checkMembership(
-          currMerkleProof,
-          currentNftsCommitment,
-          finalIdx,
-          currAction.originalNFTHash,
-          { hashValue: false }
-        ),
-        [finalIdx, currAction.nft.hash()],
-        [DUMMY_NFT_ID, ProvableMerkleTreeUtils.EMPTY_VALUE]
-      )
-    )
-  );
+  // process dummy data
+  let isDummyData = currAction.isDummyData();
+  let dummyResult = { id: DUMMY_NFT_ID, hash: DUMMY_NFT_HASH };
 
-  let isProofValid = ProvableMerkleTreeUtils.checkMembership(
+  let originalHashValid = ProvableMerkleTreeUtils.checkMembership(
     currMerkleProof,
     currentNftsCommitment,
-    updateNftId,
+    Circuit.if(isMint, currentIndex, currAction.nft.id),
     currAction.originalNFTHash,
+    Field,
     { hashValue: false }
   );
 
-  Circuit.asProver(() => {
-    console.log('isProofValid: ', isProofValid.toString());
-  });
+  let nftResult = Circuit.switch([isMint, isTransfer, isDummyData], NFTResult, [
+    Circuit.if(
+      currentIndex.lt(NFT_SUPPLY).and(originalHashValid),
+      mintResult,
+      dummyResult
+    ),
+    Circuit.if(originalHashValid, transferResult, dummyResult),
+    dummyResult,
+  ]);
+
+  Circuit.log('isProofValid: ', originalHashValid);
 
   currentNftsCommitment = Circuit.if(
-    updateNftId
-      .equals(DUMMY_NFT_ID)
-      .and(updateNFTHash.equals(ProvableMerkleTreeUtils.EMPTY_VALUE))
-      .or(isProofValid.not()),
+    Circuit.equal(nftResult, dummyResult),
     currentNftsCommitment,
     ProvableMerkleTreeUtils.computeRoot(
       currMerkleProof,
-      updateNftId,
-      updateNFTHash,
+      nftResult.id,
+      nftResult.hash,
+      Field,
       { hashValue: false }
     )
   );
@@ -146,7 +137,7 @@ let NftRollupProver = Experimental.ZkProgram({
           let currMerkleProof = actionBatch.merkleProofs[i];
 
           let newState = rollupStateTransform({
-            currAction,
+            currAction: currAction as Action,
             currMerkleProof,
             currentActionsHash,
             currentIndex,
@@ -158,24 +149,20 @@ let NftRollupProver = Experimental.ZkProgram({
           currentNftsCommitment = newState.currentNftsCommitment;
         }
 
-        currentActionsHash.assertEquals(afterCurrActonsHash);
-        Circuit.asProver(() => {
-          console.log(
-            `currentActionsHash: ${currentActionsHash.toString()} assert success`
-          );
-        });
-        currentIndex.assertEquals(afterCurrIndex);
-        Circuit.asProver(() => {
-          console.log(
-            `currentIndex: ${currentIndex.toString()} assert success`
-          );
-        });
-        currentNftsCommitment.assertEquals(afterNfsCommitment);
-        Circuit.asProver(() => {
-          console.log(
-            `currentNftsCommitment: ${currentNftsCommitment.toString()} assert success`
-          );
-        });
+        currentActionsHash.assertEquals(
+          afterCurrActonsHash,
+          'currentActionsHash assertion failed'
+        );
+
+        currentIndex.assertEquals(
+          afterCurrIndex,
+          'currentIndex assertion failed'
+        );
+
+        currentNftsCommitment.assertEquals(
+          afterNfsCommitment,
+          'currentNftsCommitment assertion failed'
+        );
       },
     },
 
@@ -203,24 +190,20 @@ let NftRollupProver = Experimental.ZkProgram({
             currentNftsCommitment: prevNftsCommitment,
           });
 
-        currentActionsHash.assertEquals(afterCurrActonsHash);
-        Circuit.asProver(() => {
-          console.log(
-            `currentActionsHash: ${currentActionsHash.toString()} assert success`
-          );
-        });
-        currentIndex.assertEquals(afterCurrIndex);
-        Circuit.asProver(() => {
-          console.log(
-            `currentIndex: ${currentIndex.toString()} assert success`
-          );
-        });
-        currentNftsCommitment.assertEquals(afterNfsCommitment);
-        Circuit.asProver(() => {
-          console.log(
-            `currentNftsCommitment: ${currentNftsCommitment.toString()} assert success`
-          );
-        });
+        currentActionsHash.assertEquals(
+          afterCurrActonsHash,
+          'currentActionsHash assertion failed'
+        );
+
+        currentIndex.assertEquals(
+          afterCurrIndex,
+          'currentIndex assertion failed'
+        );
+
+        currentNftsCommitment.assertEquals(
+          afterNfsCommitment,
+          'currentNftsCommitment assertion failed'
+        );
       },
     },
 
@@ -235,9 +218,15 @@ let NftRollupProver = Experimental.ZkProgram({
         p1.verify();
         p2.verify();
 
-        p1.publicInput.source.assertEquals(stateTransition.source);
-        p1.publicInput.target.assertEquals(p2.publicInput.source);
-        p2.publicInput.target.assertEquals(stateTransition.target);
+        (p1.publicInput.source as RollupState).assertEquals(
+          stateTransition.source as RollupState
+        );
+        (p1.publicInput.target as RollupState).assertEquals(
+          p2.publicInput.source as RollupState
+        );
+        (p2.publicInput.target as RollupState).assertEquals(
+          stateTransition.target as RollupState
+        );
       },
     },
   },
@@ -249,8 +238,7 @@ let NftRollupProverHelper = {
   commitActionBatch(
     actions: Action[],
     currState: RollupState,
-    deepSubTree: DeepMerkleSubTree<Field>,
-    zeroProof: MerkleProof
+    deepSubTree: DeepMerkleSubTree<Field>
   ): { stateTransition: RollupStateTransition; actionBatch: ActionBatch } {
     if (actions.length > ActionBatch.batchSize) {
       throw new Error(
@@ -262,7 +250,7 @@ let NftRollupProverHelper = {
     let currentIndex = currState.currentIndex.toBigInt();
     let newMerkleProofs: MerkleProof[] = [];
 
-    let dummyProof = zeroProof;
+    let dummyProof = createEmptyValue(MerkleProof);
 
     for (let i = 0, len = actions.length; i < len; i++) {
       let currAction = actions[i];
@@ -284,7 +272,7 @@ let NftRollupProverHelper = {
         // mint
         if (currentIndex < NFT_SUPPLY) {
           currentIndex = currentIndex + 1n;
-          let currentNftHash = currAction.nft
+          let currentNftHash = (currAction.nft as NFT)
             .assignId(Field(currentIndex))
             .hash();
 
@@ -307,7 +295,7 @@ let NftRollupProverHelper = {
           let currentMerkleProof = deepSubTree.prove(currentNftIdBigInt);
           newMerkleProofs.push(currentMerkleProof);
 
-          let currentNftHash = currAction.nft.hash();
+          let currentNftHash = (currAction.nft as NFT).hash();
           deepSubTree.update(currentNftIdBigInt, currentNftHash);
         } else {
           console.log('fake nft, id: ', currentNftId.toString());
@@ -323,7 +311,10 @@ let NftRollupProverHelper = {
       newMerkleProofs.push(dummyProof);
     }
 
-    let actionBatch = new ActionBatch(actions, newMerkleProofs);
+    let actionBatch = new ActionBatch({
+      actions,
+      merkleProofs: newMerkleProofs,
+    });
 
     return {
       stateTransition: RollupStateTransition.from({
@@ -360,14 +351,14 @@ let NftRollupProverHelper = {
 
     let currentNftId = currAction.nft.id;
     let currentNftIdBigInt = currentNftId.toBigInt();
-    let currentNftHash = currAction.nft.hash();
+    let currentNftHash = (currAction.nft as NFT).hash();
     let merkleProof = deepSubTree.prove(index);
 
     if (currAction.isMint().toBoolean() && newCurrentIndex < supply) {
       // mint
       newCurrentIndex = newCurrentIndex + 1n;
 
-      currentNftHash = currAction.nft.assignId(currentNftId).hash();
+      currentNftHash = (currAction.nft as NFT).assignId(currentNftId).hash();
       nftsCommitment = deepSubTree.update(newCurrentIndex, currentNftHash);
     }
 
@@ -402,6 +393,9 @@ let NftRollupProverHelper = {
     let source = p1.publicInput.source;
     let target = p2.publicInput.target;
 
-    return RollupStateTransition.from({ source, target });
+    return RollupStateTransition.from({
+      source: source as RollupState,
+      target: target as RollupState,
+    });
   },
 };

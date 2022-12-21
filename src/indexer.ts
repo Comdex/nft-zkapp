@@ -20,7 +20,7 @@ async function getProof(id: bigint): Promise<BaseMerkleProof> {
 
 async function getNFTFromIndexer(id: bigint): Promise<NFT> {
   let nft = await merkleTree.get(id);
-  return nft!;
+  return nft as NFT;
 }
 
 async function runIndexer(zkapp: NftZkapp): Promise<Field> {
@@ -63,7 +63,7 @@ async function indexerUpdate(
 ): Promise<Field> {
   let pendingActions = getPendingActions(zkapp, fromActionHash, endActionHash);
   let root = await updateIndexerMerkleTree(
-    merkleTree,
+    merkleTree as any,
     pendingActions,
     lastIndex,
     currentIndex,
@@ -92,7 +92,7 @@ function getPendingActions(
     for (let j = 0, acLen = actionList.length; j < acLen; j++) {
       let action = actionList[j];
       if (currActionsNum < MAX_ACTIONS_NUM) {
-        actions.push(action);
+        actions.push(action as Action);
         currActionsNum++;
       } else {
         break;
@@ -124,7 +124,10 @@ async function updateIndexerMerkleTree(
     if (action.isMint().toBoolean() && curPos <= curIdx && curPos < curSupply) {
       curPos = curPos + 1n;
       console.log('indexer-mint nft id: ', curPos.toString());
-      root = await tree.update(curPos, action.nft.assignId(Field(curPos)));
+      root = await tree.update(
+        curPos,
+        (action.nft as NFT).assignId(Field(curPos))
+      );
     } else if (action.isTransfer().toBoolean()) {
       // transfer action
       console.log('indexer-transfer nft id: ', currentId.toString());
@@ -140,7 +143,7 @@ async function updateIndexerMerkleTree(
 
       if (nftExist) {
         console.log('nft exist, id: ', currentId.toString());
-        root = await tree.update(currentId.toBigInt(), action.nft);
+        root = await tree.update(currentId.toBigInt(), action.nft as NFT);
       }
     }
   }

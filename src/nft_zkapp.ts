@@ -9,6 +9,8 @@ import {
   PublicKey,
   PrivateKey,
   CircuitString,
+  Reducer,
+  Circuit,
 } from 'snarkyjs';
 
 import { Action } from './models/action';
@@ -21,8 +23,8 @@ import { NftRollupProof } from './rollup_prover';
 export { NftZkapp, NFT_INIT_INDEX, NFT_INIT_ACTIONSHASH };
 
 const NFT_INIT_COMMITMENT = merkleTree.getRoot();
-const NFT_INIT_INDEX = Field.zero;
-const NFT_INIT_ACTIONSHASH = Experimental.Reducer.initialActionsHash;
+const NFT_INIT_INDEX = Field(0);
+const NFT_INIT_ACTIONSHASH = Reducer.initialActionsHash;
 const NFT_NAME = 'MinaGenesis';
 const NFT_SYMBOL = 'MG';
 
@@ -30,9 +32,9 @@ console.log('nft initCommitment: ', NFT_INIT_COMMITMENT.toString());
 
 class NftZkapp extends SmartContract {
   // constant supply
-  SUPPLY = Field.fromNumber(NFT_SUPPLY);
+  SUPPLY = Field(NFT_SUPPLY);
 
-  reducer = Experimental.Reducer({ actionType: Action });
+  reducer = Reducer({ actionType: Action as any });
 
   @state(RollupState) state = State<RollupState>();
 
@@ -41,7 +43,11 @@ class NftZkapp extends SmartContract {
   deploy(args: DeployArgs) {
     super.deploy(args);
     this.state.set(
-      new RollupState(NFT_INIT_COMMITMENT, NFT_INIT_INDEX, NFT_INIT_ACTIONSHASH)
+      new RollupState({
+        nftsCommitment: NFT_INIT_COMMITMENT,
+        currentIndex: NFT_INIT_INDEX,
+        currentActionsHash: NFT_INIT_ACTIONSHASH,
+      })
     );
   }
 
@@ -106,7 +112,8 @@ class NftZkapp extends SmartContract {
     this.account.sequenceState.assertEquals(
       proof.publicInput.target.currentActionsHash
     );
-    proof.publicInput.source.assertEquals(state);
-    this.state.set(proof.publicInput.target);
+    (proof.publicInput.source as RollupState).assertEquals(state);
+    this.state.set(proof.publicInput.target as RollupState);
+    Circuit.log('circuit-rollup success');
   }
 }
