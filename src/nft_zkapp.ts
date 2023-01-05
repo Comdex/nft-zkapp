@@ -5,7 +5,6 @@ import {
   State,
   method,
   DeployArgs,
-  Experimental,
   PublicKey,
   PrivateKey,
   CircuitString,
@@ -90,14 +89,16 @@ class NftZkapp extends SmartContract {
   transfer(receiver: PublicKey, nft: NFT, senderKey: PrivateKey) {
     nft.isAssignedId().assertTrue();
 
-    //TODO: Due to a bug in the decryption of snarkyjs, this assertion is not enabled for the time being
-    //nft.checkOwner(senderKey).assertTrue();
+    // TODO: Due to a bug in the decryption of snarkyjs, this assertion is not enabled for the time being
+    // See https://github.com/Comdex/nft-zkapp/issues/5
+    // nft.checkOwner(senderKey).assertTrue();
     senderKey.toPublicKey().equals(receiver).assertFalse();
 
     const originalNFTHash = nft.hash();
 
-    //TODO: a bug to fix
-    //nft.changeOwner(receiver);
+    // TODO: A bug to fix, in order to run normally, it can only be commented temporarily
+    // See https://github.com/Comdex/nft-zkapp/issues/5 and https://github.com/Comdex/nft-zkapp/issues/6
+    // nft.changeOwner(receiver);
 
     this.reducer.dispatch(Action.transfer(nft, originalNFTHash));
   }
